@@ -1,0 +1,101 @@
+/* Paper Dashboard - Design Tokens (Lit Adapted from taste-skill) */
+/* DESIGN_VARIANCE=8, MOTION_INTENSITY=6, VISUAL_DENSITY=4 */
+
+:root {
+  /* Colors - Neutral Zinc base + single Emerald accent */
+  --color-bg: #fafafa;
+  --color-surface: #ffffff;
+  --color-border: #e4e4e7;
+  --color-border-light: #f4f4f5;
+  
+  --color-text-primary: #18181b;
+  --color-text-secondary: #52525b;
+  --color-text-tertiary: #a1a1aa;
+  
+  /* Accent - Emerald, desaturated */
+  --color-accent: #10b981;
+  --color-accent-hover: #059669;
+  --color-accent-light: #d1fae5;
+  
+  /* Shadows - subtle, tinted */
+  --shadow-sm: 0 1px 2px 0 rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px -2px rgba(0,0,0,0.06);
+  --shadow-lg: 0 20px 40px -15px rgba(0,0,0,0.05);
+  
+  /* Typography */
+  --font-sans: 'Geist', system-ui, sans-serif;
+  --font-mono: 'Geist Mono', monospace;
+  
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.25rem;
+  --text-2xl: 1.5rem;
+  --text-3xl: 1.875rem;
+  
+  /* Spacing - 4px grid */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-12: 3rem;
+  
+  /* Border Radius */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  
+  /* Transitions - cubic-bezier spring feel */
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --transition-fast: 150ms var(--ease-spring);
+  --transition-base: 250ms var(--ease-spring);
+  --transition-slow: 400ms var(--ease-spring);
+}
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text-primary);
+  min-height: 100dvh;
+}
+
+/* Anti-AI pattern: no Inter */
+* {
+  font-family: var(--font-sans) !important;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-text-tertiary);
+}
