@@ -168,3 +168,54 @@ checkExistingWorkflow()
 # But frontend wasn't loading them
 curl -H "X-Api-Key: <key>" http://localhost:8080/api/tasks
 ```
+
+---
+
+## 2026-03-21 21:31
+
+### 新增：集中式日志系统
+
+**问题**：Master 指出 Debug 日志只显示在前端，我无法看到。
+
+**解决方案**：
+1. 创建 `backend/logger.js` 集中式日志模块
+2. 所有 API 请求记录到 `/tmp/paper-dashboard-debug.log`
+3. 添加无需认证的 debug API 端点
+
+**日志查看方式**：
+
+1. **直接查看文件**（我可以用 exec 读取）：
+   ```bash
+   cat /tmp/paper-dashboard-debug.log
+   ```
+
+2. **通过 API**（Master 可以用浏览器查看）：
+   ```
+   GET http://localhost:8080/api/debug/logs
+   ```
+
+**日志格式**：
+```json
+{
+  "timestamp": "2026-03-21T13:31:19.546Z",
+  "level": "info",
+  "source": "API",
+  "message": "Task created",
+  "data": { "taskId": "xxx" }
+}
+```
+
+**日志源**：
+- `API` - HTTP API 请求
+- `WS` - WebSocket 中继
+- `UPLOAD` - 文件上传
+- `GATEWAY` - Gateway 连接
+
+### 验证结果
+
+```
+[13:31:19] [API] Task created {taskId: "b8b9996a-ca67-4858-86e0-b76455ce10b6"}
+[13:31:19] [API] API request {method: "POST", path: "/api/tasks", status: 200}
+```
+
+现在我可以完全监控 Dashboard 的后台活动了！

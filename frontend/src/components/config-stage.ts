@@ -554,8 +554,10 @@ export class ConfigStage extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
+    // Initialize in order
     this.checkApiConnection();
-    this.loadExistingTask();
+    // Delay loadExistingTask to ensure API connection is ready
+    setTimeout(() => this.loadExistingTask(), 100);
   }
   // LocalStorage helpers
   private saveTaskId(taskId: string | null) {
@@ -571,30 +573,51 @@ export class ConfigStage extends LitElement {
   }
 
   private async loadExistingTask() {
-    const savedTaskId = this.loadTaskId();
-    if (savedTaskId) {
-      console.log('[ConfigStage] Found saved task:', savedTaskId);
-      this.debug('log', 'loadExistingTask_found', { taskId: savedTaskId });
-      
-      try {
-        const response = await apiFetch(`${API_BASE}/api/tasks/${savedTaskId}/status`);
-        if (response.ok) {
-          const status = await response.json();
-          if (status) {
-            this.taskId = savedTaskId;
-            this.taskStatus = status;
-            this.debug('log', 'loadExistingTask_success', { status });
-            return;
-          }
-        }
-      } catch (e) {
-        console.warn('[ConfigStage] Failed to load existing task:', e);
-      }
-      
-      // Task not found or invalid, clear it
-      this.saveTaskId(null);
+    // Wait for API to be connected first
+    let retries = 0;
+    while (!this.apiConnected && retries < 50) {
+      await new Promise(resolve => setTimeout(resolve, 100));
+      retries++;
     }
-    this.debug('log', 'loadExistingTask_noTask');
+    
+    if (!this.apiConnected) {
+      this.debug('warn', 'loadExistingTask_apiNotConnected');
+      return;
+    }
+    
+    const savedTaskId = this.loadTaskId();
+    this.debug('log', 'loadExistingTask_start', { savedTaskId, apiConnected: this.apiConnected });
+    
+    if (!savedTaskId) {
+      this.debug('log', 'loadExistingTask_noSavedId');
+      return;
+    }
+    
+    try {
+      const response = await apiFetch(`${API_BASE}/api/tasks/${savedTaskId}/status`);
+      this.debug('log', 'loadExistingTask_response', { status: response.status });
+      
+      if (response.ok) {
+        const status = await response.json();
+        if (status) {
+          this.taskId = savedTaskId;
+          this.taskStatus = status;
+          this.debug('log', 'loadExistingTask_success', { 
+            taskId: savedTaskId, 
+            papers: status.progress?.papers_total 
+          });
+          return;
+        }
+      }
+    } catch (e) {
+      this.debug('error', 'loadExistingTask_error', { error: String(e) });
+    }
+    
+    // Task not found or invalid, clear it
+    this.debug('log', 'loadExistingTask_clearingInvalid');
+    this.saveTaskId(null);
+    this.taskId = null;
+    this.taskStatus = null;
   }
 
 
@@ -774,6 +797,7 @@ export class ConfigStage extends LitElement {
         formData.append('paper', file);
 
         const response = await fetch(`${API_BASE}/api/tasks/${this.taskId}/papers`, {
+          headers: { 'X-Api-Key': API_KEY },
           method: 'POST',
           body: formData
         });
