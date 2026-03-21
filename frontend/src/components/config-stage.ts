@@ -541,6 +541,11 @@ export class ConfigStage extends LitElement {
   @state() private feedbackHistory: Array<{feedback: string; timestamp: Date}> = [];
   @state() private currentFeedback = '';
   @state() private dragover = false;
+
+  // Debug mode
+  @state() private debugMode = false;
+  @state() private debugLogs: Array<{timestamp: number; level: string; action: string; data: any}> = [];
+
   @state() private apiConnected = false;
   @state() private apiChecking = true;
   @state() private errorMessage = '';
@@ -565,17 +570,22 @@ export class ConfigStage extends LitElement {
       const response = await fetch(`${API_BASE}/api/health`);
       if (response.ok) {
         this.apiConnected = true;
+      this.debug('log', 'apiConnected');
       } else {
         this.apiConnected = false;
+      this.debug('warn', 'apiDisconnected');
       }
     } catch {
       this.apiConnected = false;
+      this.debug('warn', 'apiDisconnected');
     }
     this.apiChecking = false;
   }
 
   private async createTask() {
     console.log('[ConfigStage] createTask called, apiConnected:', this.apiConnected);
+    this.debug('log', 'checkApiConnection_start');
+    this.debug('log', 'createTask_start', { apiConnected: this.apiConnected });
     if (!this.apiConnected) {
       this.errorMessage = '后端服务未连接，请刷新页面重试';
       return;
@@ -638,6 +648,32 @@ export class ConfigStage extends LitElement {
     } catch (e) {
       console.error('Failed to load topics:', e);
     }
+  }
+
+
+  // Debug logging
+  private debug(level: 'log' | 'warn' | 'error', action: string, data?: any) {
+    const log = {
+      timestamp: Date.now(),
+      level,
+      action,
+      data
+    };
+    console[level]('[ConfigStage]', action, data);
+    if (this.debugMode) {
+      this.debugLogs = [...this.debugLogs.slice(-99), log];
+      this.requestUpdate();
+    }
+    this.dispatchEvent(new CustomEvent('debug-log', { detail: log, bubbles: true, composed: true }));
+  }
+  
+  private toggleDebug() {
+    this.debugMode = !this.debugMode;
+    this.debugLogs = [];
+  }
+  
+  private clearDebugLogs() {
+    this.debugLogs = [];
   }
 
   private notifyReadyState() {
