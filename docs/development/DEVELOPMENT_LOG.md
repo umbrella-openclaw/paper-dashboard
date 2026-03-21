@@ -254,3 +254,50 @@ async uploadPapers(files: File[]) {
 - 前端: http://192.168.1.161:3460
 - 后端: http://192.168.1.161:8080
 - Debug 日志: GET /api/debug/logs
+
+---
+
+## Session 11: 服务器启动失败 (21:46)
+
+### Master 反馈
+"刷新页面之后，就显示 No papers... 但点击创建新论文又有一个论文正在处理"
+
+### 我的分析
+1. 上传请求返回 401 - 缺少 X-Api-Key header
+2. loadExistingTask 选择任务逻辑有问题
+3. 服务器 CORS 配置有 bug 导致启动失败
+
+### 解决方案
+1. 添加 headers: { 'X-Api-Key': API_KEY } 到上传请求
+2. 修改 loadExistingTask 选择最佳任务（waiting_confirm > processing > idle）
+3. 修复 CORS 配置中的 console.warn bug
+
+### 结果
+- ✅ 服务器修复后正常启动
+- ✅ 上传功能正常（返回 201）
+- ✅ 新构建已部署
+
+---
+
+## Session 12: 上传问题和队列清理 (21:58)
+
+### Master 反馈
+- 上传论文完全没有反应
+- 刷新页面后依然是 No papers yet
+- 后端队列有 3 篇待处理论文，需要清理
+- 要求实现"未指定标题论文"作为缺省名字
+
+### 我的分析
+1. 上传请求可能仍然缺少 API Key
+2. 任务选择逻辑有问题
+3. 需要在创建时就添加缺省标题
+
+### 解决方案
+1. 清理了所有 3 个冗余任务
+2. Codex 正在分析根因
+3. 将实现缺省标题逻辑
+
+### 待完成
+- [ ] 修复上传问题
+- [ ] 实现"未指定标题论文"缺省名字
+- [ ] Codex 分析结果

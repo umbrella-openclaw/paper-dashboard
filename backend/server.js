@@ -92,7 +92,8 @@ function createInitialStatus(taskId) {
     stage_status: 'idle',
     progress: { papers_processed: 0, papers_total: 0, topics_generated: 0 },
     result: null,
-    messages: [{ timestamp: new Date().toISOString(), from: 'system', content: '任务已创建' }],
+    messages: [{ timestamp: new Date().toISOString(), from: 'system', content: '任务已创建: 未指定标题论文' }],
+    title: '未指定标题论文',
     error: null,
     updated_at: new Date().toISOString()
   };
