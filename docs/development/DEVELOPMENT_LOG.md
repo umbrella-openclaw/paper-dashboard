@@ -114,3 +114,57 @@ Dashboard → WebSocket Relay → OpenClaw Gateway → Session
 - Gateway handshake (lines 80-100)
 - Message routing (lines 150-180)
 - Client auth (lines 200-220)
+
+---
+
+## 2026-03-21 21:26
+
+### Issues Fixed
+
+#### Issue 1: State Not Persisting on Refresh
+**Problem**: When page refreshes, paper being processed disappears.
+**Root Cause**: Frontend doesn't load existing task state on mount, and doesn't save taskId to localStorage.
+**Fix**: 
+- Added `saveTaskId()` and `loadTaskId()` helpers
+- Added `loadExistingTask()` called on `connectedCallback`
+- Now persists taskId in localStorage
+- Loads existing task status on page load
+
+#### Issue 2: Upload Stuck at "0 篇论文"
+**Problem**: Upload shows "0 篇论文已上传" and hangs.
+**Root Cause**: 
+1. Upload flow was async but not properly awaited
+2. UI status wasn't updated after successful upload
+3. Task creation and upload were not properly sequenced
+
+**Fix**:
+- Fixed `uploadPapers()` to properly await task creation
+- Updated local UI status immediately after upload success
+- Added better debug logging
+
+### Code Changes
+
+#### config-stage.ts
+```typescript
+// New methods
+saveTaskId(taskId)
+loadTaskId()
+loadExistingTask()
+
+// Fixed methods
+uploadPapers() - now properly awaits task creation
+doUpload() - updates local status immediately
+```
+
+#### paper-app.ts
+```typescript
+// New method
+checkExistingWorkflow()
+```
+
+### API Verification
+```bash
+# Backend has tasks with papers_total: 1
+# But frontend wasn't loading them
+curl -H "X-Api-Key: <key>" http://localhost:8080/api/tasks
+```

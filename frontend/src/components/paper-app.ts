@@ -134,7 +134,17 @@ export class PaperApp extends LitElement {
   async connectedCallback() {
     super.connectedCallback();
     await this.loadData();
+    this.checkExistingWorkflow();
   }
+  // Check for existing workflow task
+  private async checkExistingWorkflow() {
+    const savedTaskId = localStorage.getItem('paper-dashboard-workflow-task-id');
+    if (savedTaskId) {
+      console.log('[PaperApp] Found existing workflow task:', savedTaskId);
+      // Could load and resume the workflow here
+    }
+  }
+
 
   async loadData() {
     this.loading = true;

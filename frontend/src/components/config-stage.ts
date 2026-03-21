@@ -555,7 +555,48 @@ export class ConfigStage extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this.checkApiConnection();
+    this.loadExistingTask();
   }
+  // LocalStorage helpers
+  private saveTaskId(taskId: string | null) {
+    if (taskId) {
+      localStorage.setItem('paper-dashboard-task-id', taskId);
+    } else {
+      localStorage.removeItem('paper-dashboard-task-id');
+    }
+  }
+
+  private loadTaskId(): string | null {
+    return localStorage.getItem('paper-dashboard-task-id');
+  }
+
+  private async loadExistingTask() {
+    const savedTaskId = this.loadTaskId();
+    if (savedTaskId) {
+      console.log('[ConfigStage] Found saved task:', savedTaskId);
+      this.debug('log', 'loadExistingTask_found', { taskId: savedTaskId });
+      
+      try {
+        const response = await apiFetch(`${API_BASE}/api/tasks/${savedTaskId}/status`);
+        if (response.ok) {
+          const status = await response.json();
+          if (status) {
+            this.taskId = savedTaskId;
+            this.taskStatus = status;
+            this.debug('log', 'loadExistingTask_success', { status });
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn('[ConfigStage] Failed to load existing task:', e);
+      }
+      
+      // Task not found or invalid, clear it
+      this.saveTaskId(null);
+    }
+    this.debug('log', 'loadExistingTask_noTask');
+  }
+
 
   disconnectedCallback() {
     super.disconnectedCallback();
@@ -596,6 +637,7 @@ export class ConfigStage extends LitElement {
       if (response.ok) {
         const data = await response.json();
         this.taskId = data.task_id;
+        this.saveTaskId(data.task_id);
         this.taskStatus = data.status;
         this.startPolling();
         this.notifyReadyState();
