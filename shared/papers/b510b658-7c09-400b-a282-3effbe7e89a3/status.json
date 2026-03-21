@@ -1,0 +1,20 @@
+{
+  "task_id": "b510b658-7c09-400b-a282-3effbe7e89a3",
+  "stage": "INTAKE",
+  "stage_status": "idle",
+  "progress": {
+    "papers_processed": 0,
+    "papers_total": 1,
+    "topics_generated": 0
+  },
+  "result": null,
+  "messages": [
+    {
+      "timestamp": "2026-03-21T13:23:25.027Z",
+      "from": "system",
+      "content": "任务已创建"
+    }
+  ],
+  "error": null,
+  "updated_at": "2026-03-21T13:23:25.041Z"
+}

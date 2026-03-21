@@ -2,6 +2,24 @@ import { LitElement, css, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 
 const API_BASE = 'http://192.168.1.161:8080';
+const API_KEY = '3a3ce9520026e5ca4b4196f964fda10fb71fa224f0c2925fd031373298844f8a';
+
+function apiHeaders() {
+  return {
+    'X-Api-Key': API_KEY,
+    'Content-Type': 'application/json'
+  };
+}
+
+function apiFetch(url: string, options: RequestInit = {}) {
+  return fetch(url, {
+    ...options,
+    headers: {
+      ...apiHeaders(),
+      ...(options.headers || {})
+    }
+  });
+}
 
 interface TaskStatus {
   task_id: string;
@@ -557,13 +575,14 @@ export class ConfigStage extends LitElement {
   }
 
   private async createTask() {
+    console.log('[ConfigStage] createTask called, apiConnected:', this.apiConnected);
     if (!this.apiConnected) {
-      this.errorMessage = '后端服务未连接';
+      this.errorMessage = '后端服务未连接，请刷新页面重试';
       return;
     }
 
     try {
-      const response = await fetch(`${API_BASE}/api/tasks`, { method: 'POST' });
+      const response = await apiFetch(`${API_BASE}/api/tasks`, { method: 'POST' });
       if (response.ok) {
         const data = await response.json();
         this.taskId = data.task_id;
@@ -590,7 +609,7 @@ export class ConfigStage extends LitElement {
     if (!this.taskId) return;
 
     try {
-      const response = await fetch(`${API_BASE}/api/tasks/${this.taskId}/status`);
+      const response = await apiFetch(`${API_BASE}/api/tasks/${this.taskId}/status`);
       if (response.ok) {
         this.taskStatus = await response.json();
 
@@ -611,7 +630,7 @@ export class ConfigStage extends LitElement {
     if (!this.taskId) return;
 
     try {
-      const response = await fetch(`${API_BASE}/api/tasks/${this.taskId}/topics`);
+      const response = await apiFetch(`${API_BASE}/api/tasks/${this.taskId}/topics`);
       if (response.ok) {
         const data = await response.json();
         this.topics = data.topics || [];
@@ -652,12 +671,24 @@ export class ConfigStage extends LitElement {
   }
 
   private async uploadPapers(files: File[]) {
+    console.log('[ConfigStage] uploadPapers called with', files.length, 'files');
     if (files.length === 0) return;
 
     if (!this.taskId) {
-      await this.createTask();
-      if (!this.taskId) return;
+      console.log('[ConfigStage] No taskId, creating task first...');
+      this.createTask().then(() => {
+        console.log('[ConfigStage] Task created, taskId:', this.taskId);
+        if (this.taskId) {
+          this.doUpload(files);
+        }
+      });
+      return;
     }
+    this.doUpload(files);
+  }
+
+  private async doUpload(files: File[]) {
+    console.log('[ConfigStage] doUpload called with', files.length, 'files, taskId:', this.taskId);
 
     for (const file of files) {
       try {
@@ -702,7 +733,7 @@ export class ConfigStage extends LitElement {
 
       // Note: The actual sessions_spawn should be called from here
       // For now, we just trigger the backend which will handle it
-      const response = await fetch(`${API_BASE}/api/tasks/${this.taskId}/trigger`, {
+      const response = await apiFetch(`${API_BASE}/api/tasks/${this.taskId}/trigger`, {
         method: 'POST'
       });
 
@@ -739,7 +770,7 @@ export class ConfigStage extends LitElement {
 
     // Send feedback to backend
     if (this.taskId) {
-      await fetch(`${API_BASE}/api/tasks/${this.taskId}/messages`, {
+      await apiFetch(`${API_BASE}/api/tasks/${this.taskId}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -771,7 +802,7 @@ export class ConfigStage extends LitElement {
 
     // Save selected topic
     if (this.taskId) {
-      await fetch(`${API_BASE}/api/tasks/${this.taskId}/topics`, {
+      await apiFetch(`${API_BASE}/api/tasks/${this.taskId}/topics`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ topic: this.selectedTopic })
