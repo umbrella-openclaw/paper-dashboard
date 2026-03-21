@@ -324,3 +324,23 @@ async uploadPapers(files: File[]) {
 ### 部署
 - 新构建已推送
 - Master 刷新页面测试
+
+---
+
+## Session 13: Subagent 超时问题 (22:05)
+
+### Master 反馈
+Subagent main timed out，应该分配更合理的子任务，不要过重的负载
+
+### 我的分析
+1. Codex subagent 任务太重，导致超时
+2. TypeScript 类型错误未修复
+
+### 解决方案
+1. 修复 TypeScript 错误：添加 (t: any) 类型注解
+2. 未来给 subagent 更小、更具体的任务
+
+### 未来改进
+- Subagent 任务应该单一职责
+- 避免让 subagent 做完整功能实现
+- 优先在主 session 修复简单问题

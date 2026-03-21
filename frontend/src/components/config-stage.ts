@@ -707,6 +707,7 @@ export class ConfigStage extends LitElement {
       }
     } catch (e) {
       this.errorMessage = `创建任务失败: ${(e as Error).message}`;
+      throw e; // 重新抛出异常，让调用者知道失败了
     }
   }
 
@@ -817,12 +818,15 @@ export class ConfigStage extends LitElement {
 
     if (!this.taskId) {
       console.log('[ConfigStage] No taskId, creating task first...');
-      this.createTask().then(() => {
+      try {
+        await this.createTask();
         console.log('[ConfigStage] Task created, taskId:', this.taskId);
         if (this.taskId) {
           this.doUpload(files);
         }
-      });
+      } catch (e) {
+        console.error('[ConfigStage] createTask failed:', e);
+      }
       return;
     }
     this.doUpload(files);

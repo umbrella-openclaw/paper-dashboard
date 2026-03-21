@@ -210,6 +210,13 @@ export class PaperApp extends LitElement {
   private onConfigReadyChange(e: CustomEvent<boolean>) {
     this.configReady = e.detail;
   }
+
+  private onTopicConfirmed(e: CustomEvent) {
+    const { topic, taskId } = e.detail;
+    console.log('[PaperApp] Topic confirmed:', topic, 'taskId:', taskId);
+    // Advance to the next stage after topic confirmation
+    this.advanceStage();
+  }
   
   private advanceStage() {
     if (!this.configReady && this.currentStage === 'INTAKE') {
@@ -293,6 +300,7 @@ export class PaperApp extends LitElement {
       return html`
         <config-stage
           @config-ready-change=${this.onConfigReadyChange}
+          @topic-confirmed=${this.onTopicConfirmed}
         ></config-stage>
       `;
     }
