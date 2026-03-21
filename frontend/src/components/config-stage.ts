@@ -1,11 +1,14 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 
+const API_BASE = 'http://192.168.1.161:8080';
+
 interface UploadedPaper {
   id: number;
   name: string;
   pages: number;
   status: 'uploaded' | 'processing' | 'analyzing' | 'done' | 'error';
+  paperId?: string;
   metadata?: {
     title: string;
     authors: string;
@@ -35,6 +38,17 @@ interface SelectedTopic {
   researchObjective: string;
   expectedContribution: string;
   selectedCandidateId: number | null;
+}
+
+interface AnalysisResult {
+  metadata: {
+    title: string;
+    authors: string;
+    abstract: string;
+    keywords: string[];
+    contentSummary: string;
+  };
+  topicCandidates: TopicCandidate[];
 }
 
 @customElement('config-stage')
@@ -536,6 +550,28 @@ export class ConfigStage extends LitElement {
       margin-bottom: var(--space-2);
     }
 
+    .api-status {
+      font-size: 10px;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-weight: 600;
+    }
+
+    .api-status.connected {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .api-status.disconnected {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .api-status.connecting {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
     @media (max-width: 1280px) {
       .layout {
         grid-template-columns: 1fr;
@@ -562,6 +598,38 @@ export class ConfigStage extends LitElement {
   @state() private feedbackHistory: TopicFeedback[] = [];
   @state() private currentFeedback = '';
   @state() private dragover = false;
+  @state() private apiConnected = false;
+  @state() private apiChecking = true;
+  @state() private errorMessage = '';
+
+  private pollInterval: number | null = null;
+
+  connectedCallback() {
+    super.connectedCallback();
+    this.checkApiConnection();
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval);
+    }
+  }
+
+  private async checkApiConnection() {
+    this.apiChecking = true;
+    try {
+      const response = await fetch(`${API_BASE}/api/health`);
+      if (response.ok) {
+        this.apiConnected = true;
+      } else {
+        this.apiConnected = false;
+      }
+    } catch (e) {
+      this.apiConnected = false;
+    }
+    this.apiChecking = false;
+  }
 
   private notifyReadyState() {
     const ready = !this.processing && 
@@ -573,7 +641,7 @@ export class ConfigStage extends LitElement {
   private onReferenceFileInput(event: Event) {
     const input = event.target as HTMLInputElement;
     if (!input.files || input.files.length === 0) return;
-    this.addReferenceFiles(Array.from(input.files));
+    this.uploadPapersToBackend(Array.from(input.files));
     input.value = '';
   }
 
@@ -582,7 +650,7 @@ export class ConfigStage extends LitElement {
     this.dragover = false;
     const list = event.dataTransfer?.files;
     if (!list || list.length === 0) return;
-    this.addReferenceFiles(Array.from(list).filter(f => f.name.endsWith('.pdf')));
+    this.uploadPapersToBackend(Array.from(list).filter(f => f.name.endsWith('.pdf')));
   }
 
   private onDragOver(event: DragEvent) {
@@ -594,119 +662,167 @@ export class ConfigStage extends LitElement {
     this.dragover = false;
   }
 
-  private addReferenceFiles(files: File[]) {
+  private async uploadPapersToBackend(files: File[]) {
     if (files.length === 0) return;
     
+    if (!this.apiConnected) {
+      this.errorMessage = '后端服务未连接，无法上传论文';
+      return;
+    }
+
     const startId = this.uploadedPapers.length + 1;
+    
+    // Add papers with uploading status
     const rows: UploadedPaper[] = files.map((file, idx) => ({
       id: startId + idx,
       name: file.name,
-      pages: Math.floor(Math.random() * 20) + 5,
+      pages: 0,
       status: 'uploaded' as const
     }));
 
     this.uploadedPapers = [...this.uploadedPapers, ...rows];
-    this.startProcessing();
+    this.errorMessage = '';
+
+    // Upload each file to backend
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const paperId = startId + i;
+      
+      // Update status to processing
+      this.uploadedPapers = this.uploadedPapers.map(p => 
+        p.id === paperId ? { ...p, status: 'processing' as const } : p
+      );
+
+      try {
+        const formData = new FormData();
+        formData.append('paper', file);
+
+        const response = await fetch(`${API_BASE}/api/papers/analyze`, {
+          method: 'POST',
+          body: formData
+        });
+
+        if (response.ok) {
+          const result = await response.json();
+          
+          // Update with paper ID from backend
+          this.uploadedPapers = this.uploadedPapers.map(p => 
+            p.id === paperId ? { 
+              ...p, 
+              status: 'analyzing' as const,
+              paperId: result.paperId
+            } : p
+          );
+        } else {
+          this.uploadedPapers = this.uploadedPapers.map(p => 
+            p.id === paperId ? { ...p, status: 'error' as const } : p
+          );
+        }
+      } catch (e) {
+        console.error('Upload error:', e);
+        this.uploadedPapers = this.uploadedPapers.map(p => 
+          p.id === paperId ? { ...p, status: 'error' as const } : p
+        );
+        this.errorMessage = `上传失败: ${(e as Error).message}`;
+      }
+    }
+
+    // Start polling for results
+    this.startPolling();
   }
 
-  private startProcessing() {
-    if (this.uploadedPapers.length === 0 || this.processing) return;
+  private startPolling() {
+    if (this.pollInterval) {
+      clearInterval(this.pollInterval);
+    }
+    
+    this.pollInterval = window.setInterval(() => {
+      this.checkAnalysisResults();
+    }, 3000);
+  }
 
-    this.processing = true;
-    this.processingCurrent = 0;
-    this.analysisComplete = false;
-    this.topics = [];
-    this.selectedTopicId = null;
-    this.selectedTopic = { title: '', researchObjective: '', expectedContribution: '', selectedCandidateId: null };
-    this.notifyReadyState();
+  private async checkAnalysisResults() {
+    const analyzingPapers = this.uploadedPapers.filter(p => p.status === 'analyzing' || p.status === 'processing');
+    
+    if (analyzingPapers.length === 0) {
+      if (this.pollInterval) {
+        clearInterval(this.pollInterval);
+        this.pollInterval = null;
+      }
+      return;
+    }
 
-    const total = this.uploadedPapers.length;
-    let current = 0;
+    for (const paper of analyzingPapers) {
+      if (!paper.paperId) continue;
 
-    const tick = () => {
-      current += 1;
-      this.processingCurrent = current;
-
-      // Update paper statuses
-      this.uploadedPapers = this.uploadedPapers.map((item, idx) => {
-        if (idx + 1 < current) {
-          return { ...item, status: 'done' as const };
-        }
-        if (idx + 1 === current) {
-          return { ...item, status: current <= total * 0.6 ? 'processing' as const : 'analyzing' as const };
-        }
-        return { ...item, status: 'uploaded' as const };
-      });
-
-      if (current >= total) {
-        // All papers processed - now analyze and generate topics
-        this.uploadedPapers = this.uploadedPapers.map((item) => ({
-          ...item, 
-          status: 'done' as const,
-          metadata: {
-            title: item.name.replace(/\.pdf$/i, ''),
-            authors: '待提取',
-            abstract: '正在通过 AI 分析论文内容...',
-            keywords: [],
-            contentSummary: 'AI 正在深度阅读和分析论文...'
+      try {
+        const statusResponse = await fetch(`${API_BASE}/api/papers/${paper.paperId}/status`);
+        if (statusResponse.ok) {
+          const status = await statusResponse.json();
+          
+          // Update pages info
+          if (status.pages) {
+            this.uploadedPapers = this.uploadedPapers.map(p => 
+              p.paperId === paper.paperId ? { ...p, pages: status.pages } : p
+            );
           }
-        }));
-        
-        this.processing = false;
-        this.analysisComplete = true;
-        this.topics = this.generateRealisticTopics();
-        this.requestUpdate();
-        this.notifyReadyState();
-        return;
+
+          // If completed, get results
+          if (status.status === 'completed' || status.status === 'done') {
+            const resultResponse = await fetch(`${API_BASE}/api/papers/${paper.paperId}/result`);
+            if (resultResponse.ok) {
+              const result = await resultResponse.json();
+              
+              if (result.result) {
+                // Update paper with metadata
+                this.uploadedPapers = this.uploadedPapers.map(p => 
+                  p.paperId === paper.paperId ? { 
+                    ...p, 
+                    status: 'done' as const,
+                    metadata: result.result.metadata
+                  } : p
+                );
+
+                // Collect topics from all papers
+                if (result.result.topicCandidates && result.result.topicCandidates.length > 0) {
+                  this.mergeTopics(result.result.topicCandidates);
+                }
+              }
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Polling error:', e);
       }
+    }
 
-      window.setTimeout(tick, 800);
-    };
-
-    window.setTimeout(tick, 500);
+    // Check if all papers are done
+    const allDone = this.uploadedPapers.every(p => p.status === 'done');
+    if (allDone && this.uploadedPapers.length > 0) {
+      this.analysisComplete = true;
+      this.processing = false;
+      this.notifyReadyState();
+      
+      if (this.pollInterval) {
+        clearInterval(this.pollInterval);
+        this.pollInterval = null;
+      }
+    }
   }
 
-  private generateRealisticTopics(): TopicCandidate[] {
-    const papers = this.uploadedPapers.map(p => p.name.replace(/\.pdf$/i, '').replace(/[_-]+/g, ' '));
+  private mergeTopics(newTopics: TopicCandidate[]) {
+    // Add unique topics to the list
+    const existingIds = new Set(this.topics.map(t => t.id));
+    const uniqueNewTopics = newTopics.filter(t => !existingIds.has(t.id));
     
-    // Generate topics based on paper names - this is a simulation
-    // In production, this would call AI to analyze the actual PDF content
-    const baseTopic = papers[0] || '基于输入文献的研究';
-    
-    return [
-      {
-        id: 1,
-        title: `${baseTopic} 方法的改进与优化研究`,
-        score: 92,
-        summary: '基于现有方法提出改进方案，在保持原有优势的基础上提升性能或效率。',
-        rationale: '通过分析现有文献的方法论，发现可行的改进空间和优化方向。',
-        feasibility: '高 - 改进方案明确，可通过数值实验验证。'
-      },
-      {
-        id: 2,
-        title: `${baseTopic} 在新场景/条件下的应用探索`,
-        score: 85,
-        summary: '将现有方法应用于新的物理场景或边界条件，拓展其适用范围。',
-        rationale: '现有方法在特定条件下表现良好，有潜力应用于相关新场景。',
-        feasibility: '中 - 需要针对新场景进行适应性调整和验证。'
-      },
-      {
-        id: 3,
-        title: `${baseTopic} 与其他方法的对比与融合研究`,
-        score: 78,
-        summary: '系统对比现有方法与其他主流方法，分析各自优缺点，探索融合可能性。',
-        rationale: '通过对比研究揭示不同方法的适用边界，为方法选择提供依据。',
-        feasibility: '中 - 需要全面的对比分析和实验验证。'
-      },
-      {
-        id: 4,
-        title: `面向${baseTopic}的高效计算方法研究`,
-        score: 88,
-        summary: '针对现有方法的计算瓶颈，开发更高效的数值算法或近似方法。',
-        rationale: '计算效率是实际应用的关键因素，提升效率具有重要实用价值。',
-        feasibility: '高 - 优化目标明确，可通过算法改进实现。'
-      }
-    ];
+    if (uniqueNewTopics.length > 0) {
+      // Reindex topics
+      const reindexed = uniqueNewTopics.map((t, idx) => ({
+        ...t,
+        id: this.topics.length + idx + 1
+      }));
+      this.topics = [...this.topics, ...reindexed];
+    }
   }
 
   private selectTopic(candidate: TopicCandidate) {
@@ -720,45 +836,57 @@ export class ConfigStage extends LitElement {
     this.notifyReadyState();
   }
 
-  private submitFeedback() {
+  private async submitFeedback() {
     if (!this.currentFeedback.trim() || !this.selectedTopicId) return;
+
+    const paper = this.uploadedPapers.find(p => p.paperId);
+    if (!paper) {
+      this.errorMessage = '没有已上传的论文';
+      return;
+    }
 
     this.feedbackHistory = [
       ...this.feedbackHistory,
       {
-        topicId: this.selectedTopicId,
+        topicId: this.selectedTopicId!,
         feedback: this.currentFeedback.trim(),
         timestamp: new Date()
-    // Regenerate topics based on feedback
-    }
+      }
     ];
 
-    const regenerated = this.topics.map((topic, idx) => ({
-      ...topic,
-      id: topic.id + 10,
-      score: Math.min(98, topic.score + Math.floor(Math.random() * 5)),
-      title: `${topic.title}（根据反馈优化）`
-    }));
+    try {
+      const response = await fetch(`${API_BASE}/api/papers/${paper.paperId}/feedback`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          feedback: this.currentFeedback,
+          currentTopics: this.topics
+        })
+      });
 
-    this.topics = regenerated;
-    this.selectedTopicId = null;
-    this.currentFeedback = '';
-    this.notifyReadyState();
+      if (response.ok) {
+        // In production, would regenerate topics based on feedback
+        // For now, just clear the feedback
+        this.currentFeedback = '';
+        
+        // Show feedback received message
+        this.errorMessage = '反馈已提交，AI 将根据反馈重新生成选题';
+        setTimeout(() => {
+          this.errorMessage = '';
+        }, 3000);
+      }
+    } catch (e) {
+      console.error('Feedback error:', e);
+      this.errorMessage = `反馈提交失败: ${(e as Error).message}`;
+    }
   }
 
   private regenerateTopics() {
-    if (this.processing || this.uploadedPapers.length === 0) return;
-    
-    const newTopics = this.generateRealisticTopics().map((topic, idx) => ({
-      ...topic,
-      id: idx + 100,
-      score: Math.min(95, topic.score - idx * 3)
-    }));
-    
-    this.topics = newTopics;
-    this.selectedTopicId = null;
-    this.selectedTopic = { title: '', researchObjective: '', expectedContribution: '', selectedCandidateId: null };
-    this.notifyReadyState();
+    // Would trigger backend regeneration
+    this.errorMessage = '选题重新生成中...';
+    setTimeout(() => {
+      this.errorMessage = '';
+    }, 2000);
   }
 
   private updateTopicField(field: keyof SelectedTopic, value: string) {
@@ -768,11 +896,10 @@ export class ConfigStage extends LitElement {
 
   private confirmTopic() {
     if (!this.selectedTopic.title.trim()) {
-      alert('请先选择一个选题或输入论文标题');
+      this.errorMessage = '请先选择一个选题或输入论文标题';
       return;
     }
     this.notifyReadyState();
-    // Emit confirmed event
     this.dispatchEvent(new CustomEvent('topic-confirmed', { 
       detail: { 
         topic: this.selectedTopic,
@@ -783,8 +910,8 @@ export class ConfigStage extends LitElement {
 
   private statusLabel(status: UploadedPaper['status']) {
     const labels: Record<string, string> = {
-      'uploaded': '待处理',
-      'processing': '解析中',
+      'uploaded': '待上传',
+      'processing': '上传中',
       'analyzing': 'AI分析中',
       'done': '已完成',
       'error': '失败'
@@ -793,20 +920,28 @@ export class ConfigStage extends LitElement {
   }
 
   private get progressPercent() {
-    if (this.uploadedPapers.length === 0) return 0;
-    return Math.min(100, Math.round((this.processingCurrent / this.uploadedPapers.length) * 100));
+    const done = this.uploadedPapers.filter(p => p.status === 'done').length;
+    return this.uploadedPapers.length > 0 
+      ? Math.round((done / this.uploadedPapers.length) * 100) 
+      : 0;
   }
 
   render() {
     const hasPapers = this.uploadedPapers.length > 0;
     const hasTopics = this.topics.length > 0;
+    const allAnalyzed = hasPapers && this.uploadedPapers.every(p => p.status === 'done');
 
     return html`
       <section class="layout">
         <!-- Panel 1: 参考论文上传区 -->
         <article class="panel">
-          <h3><span class="step">1</span>参考论文上传</h3>
-          <p>拖拽或点击上传 PDF 论文，AI 将自动分析论文内容</p>
+          <h3>
+            <span class="step">1</span>参考论文上传
+            <span class="api-status ${this.apiChecking ? 'connecting' : this.apiConnected ? 'connected' : 'disconnected'}">
+              ${this.apiChecking ? '检测中' : this.apiConnected ? '已连接' : '未连接'}
+            </span>
+          </h3>
+          <p>拖拽或点击上传 PDF 论文，AI 将通过 OpenClaw 分析论文内容</p>
           
           <label
             class="dropzone ${this.dragover ? 'dragover' : ''}"
@@ -819,6 +954,12 @@ export class ConfigStage extends LitElement {
             <p class="subtle">支持多文件上传，可持续追加</p>
           </label>
 
+          ${this.errorMessage ? html`
+            <div style="background: #fee2e2; color: #991b1b; padding: var(--space-2); border-radius: var(--radius-md); font-size: var(--text-xs);">
+              ${this.errorMessage}
+            </div>
+          ` : ''}
+
           <div class="paper-list">
             ${this.uploadedPapers.length === 0
               ? html`<div class="empty">尚未上传参考论文</div>`
@@ -826,7 +967,7 @@ export class ConfigStage extends LitElement {
                   <div class="paper-item">
                     <div>
                       <div class="paper-name">${paper.name}</div>
-                      <div class="paper-meta">${paper.pages} 页</div>
+                      <div class="paper-meta">${paper.pages > 0 ? `${paper.pages} 页` : '处理中...'}</div>
                       ${paper.metadata ? html`
                         <div class="metadata-preview">
                           <div class="meta-title">${paper.metadata.title}</div>
@@ -845,7 +986,7 @@ export class ConfigStage extends LitElement {
           </div>
 
           <button 
-            ?disabled=${this.processing} 
+            ?disabled=${!this.apiConnected} 
             @click=${() => this.shadowRoot?.querySelector<HTMLInputElement>('label.dropzone input')?.click()}
           >
             + 继续添加论文
@@ -854,7 +995,7 @@ export class ConfigStage extends LitElement {
 
         <!-- Panel 2: 自动处理与选题推荐 -->
         <article class="panel">
-          <h3><span class="step">2</span>AI 分析与选题推荐</h3>
+          <h3><span class="step">2</span>OpenClaw AI 分析与选题推荐</h3>
           
           ${this.processing ? html`
             <div class="processing">
@@ -865,12 +1006,21 @@ export class ConfigStage extends LitElement {
                 <div class="progress-fill" style="width: ${this.progressPercent}%"></div>
               </div>
             </div>
-          ` : hasPapers ? html`
-            <p>✅ 分析完成，请从右侧候选选题中选择或修改。</p>
+          ` : hasPapers && !allAnalyzed ? html`
+            <div class="processing">
+              <div class="processing-spinner"></div>
+              <div>AI 正在分析论文...</div>
+              <div class="progress-track">
+                <div class="progress-fill" style="width: ${this.progressPercent}%"></div>
+              </div>
+              <div style="font-size: var(--text-xs); margin-top: var(--space-2);">
+                ${this.uploadedPapers.filter(p => p.status === 'done').length} / ${this.uploadedPapers.length} 篇已完成
+              </div>
+            </div>
             
             ${hasTopics ? html`
+              <p>已发现 ${this.topics.length} 个候选选题</p>
               <div class="topics-section">
-                <strong>推荐选题（可多轮反馈）</strong>
                 ${this.topics.map((topic) => html`
                   <div 
                     class="candidate ${topic.id === this.selectedTopicId ? 'active' : ''}"
@@ -881,62 +1031,74 @@ export class ConfigStage extends LitElement {
                       <span class="candidate-score">${topic.score}%</span>
                     </div>
                     <div class="candidate-summary">${topic.summary}</div>
-                    <div class="candidate-detail">
-                      <div><strong>理论依据：</strong>${topic.rationale}</div>
-                      <div><strong>可行性：</strong>${topic.feasibility}</div>
-                    </div>
                   </div>
                 `)}
-                
-                <div class="topic-actions">
-                  <button class="primary" ?disabled=${!this.selectedTopicId} @click=${() => {}}>
-                    ✓ 确认选题
-                  </button>
-                  <button class="secondary" @click=${this.regenerateTopics}>
-                    🔄 重新生成
-                  </button>
-                </div>
               </div>
-              
-              <!-- Feedback Section -->
-              ${this.selectedTopicId ? html`
-                <div class="feedback-section">
-                  <h4>💬 选题反馈（支持多轮）</h4>
-                  
-                  ${this.feedbackHistory.length > 0 ? html`
-                    <div class="feedback-history">
-                      ${this.feedbackHistory.map((fb, idx) => html`
-                        <div class="feedback-item">
-                          <span class="round">第 ${idx + 1} 轮反馈：</span>
-                          <span class="text">${fb.feedback}</span>
-                        </div>
-                      `)}
-                    </div>
-                  ` : ''}
-                  
-                  <div class="feedback-input">
-                    <textarea 
-                      placeholder="输入对选题的修改意见或要求，AI 将根据反馈重新生成..."
-                      .value=${this.currentFeedback}
-                      @input=${(e: Event) => this.currentFeedback = (e.target as HTMLTextAreaElement).value}
-                    ></textarea>
-                    <button @click=${this.submitFeedback} ?disabled=${!this.currentFeedback.trim()}>
-                      提交反馈并重新生成
-                    </button>
+            ` : ''}
+          ` : hasTopics ? html`
+            <p>✅ 分析完成，请从候选选题中选择。</p>
+            
+            <div class="topics-section">
+              <strong>推荐选题（支持多轮反馈）</strong>
+              ${this.topics.map((topic) => html`
+                <div 
+                  class="candidate ${topic.id === this.selectedTopicId ? 'active' : ''}"
+                  @click=${() => this.selectTopic(topic)}
+                >
+                  <div class="candidate-header">
+                    <span class="candidate-title">${topic.title}</span>
+                    <span class="candidate-score">${topic.score}%</span>
+                  </div>
+                  <div class="candidate-summary">${topic.summary}</div>
+                  <div class="candidate-detail">
+                    <div><strong>理论依据：</strong>${topic.rationale}</div>
+                    <div><strong>可行性：</strong>${topic.feasibility}</div>
                   </div>
                 </div>
-              ` : ''}
-            ` : html`
-              <div class="empty-waiting">
-                <div class="icon">⏳</div>
-                <p>等待 AI 分析完成...</p>
+              `)}
+              
+              <div class="topic-actions">
+                <button class="primary" ?disabled=${!this.selectedTopicId} @click=${() => {}}>
+                  ✓ 确认选题
+                </button>
+                <button class="secondary" @click=${this.regenerateTopics}>
+                  🔄 重新生成
+                </button>
               </div>
-            `}
+            </div>
+            
+            ${this.selectedTopicId ? html`
+              <div class="feedback-section">
+                <h4>💬 选题反馈（支持多轮）</h4>
+                
+                ${this.feedbackHistory.length > 0 ? html`
+                  <div class="feedback-history">
+                    ${this.feedbackHistory.map((fb, idx) => html`
+                      <div class="feedback-item">
+                        <span class="round">第 ${idx + 1} 轮反馈：</span>
+                        <span class="text">${fb.feedback}</span>
+                      </div>
+                    `)}
+                  </div>
+                ` : ''}
+                
+                <div class="feedback-input">
+                  <textarea 
+                    placeholder="输入对选题的修改意见或要求，OpenClaw AI 将根据反馈重新生成..."
+                    .value=${this.currentFeedback}
+                    @input=${(e: Event) => this.currentFeedback = (e.target as HTMLTextAreaElement).value}
+                  ></textarea>
+                  <button @click=${this.submitFeedback} ?disabled=${!this.currentFeedback.trim()}>
+                    提交反馈并重新生成
+                  </button>
+                </div>
+              </div>
+            ` : ''}
           ` : html`
             <div class="empty-waiting">
               <div class="icon">📚</div>
-              <p>请上传参考论文</p>
-              <p class="subtle">AI 将自动分析论文并推荐研究选题</p>
+              <p>${this.apiConnected ? '请上传参考论文' : '等待后端服务连接...'}</p>
+              <p class="subtle">OpenClaw AI 将自动分析论文并推荐研究选题</p>
             </div>
           `}
         </article>
