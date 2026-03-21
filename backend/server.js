@@ -1,12 +1,11 @@
 /**
- * Paper Dashboard Backend
+ * Paper Dashboard Backend - Hybrid Session Trigger
  * 
- * Provides API endpoints for:
- * - Paper upload and PDF parsing
- * - AI-powered metadata extraction
- * - Topic recommendation
- * 
- * Integrates with OpenClaw's AI capabilities (Plan C)
+ * 混合方案实现：
+ * 1. 接收 Dashboard 上传请求
+ * 2. 保存文件到 shared/ 目录
+ * 3. 调用 sessions_spawn 触发 OpenClaw
+ * 4. 提供状态轮询接口
  */
 
 const express = require('express');
@@ -15,22 +14,27 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { spawn } = require('child_process');
 
-// Configuration
 const PORT = 8080;
-const UPLOAD_DIR = path.join(__dirname, 'uploads');
-const OPENCLAW_GATEWAY = 'http://127.0.0.1:18789';
-const OPENCLAW_TOKEN = 'cd4a37c22ea7e71d50c067a18064fe77aac67a2a3fb1bbd7';
+const SHARED_DIR = path.join(__dirname, '..', 'shared');
+const PAPERS_DIR = path.join(SHARED_DIR, 'papers');
+const OPENCLAW_CLI = '/home/nothingts/.npm-global/bin/openclaw';
 
-// Ensure upload directory exists
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-}
+// Ensure directories exist
+[SHARED_DIR, PAPERS_DIR].forEach(dir => {
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+});
 
-// Multer configuration for file uploads
+const app = express();
+app.use(cors());
+app.use(express.json());
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => {
-    cb(null, UPLOAD_DIR);
+    cb(null, PAPERS_DIR);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -40,7 +44,7 @@ const storage = multer.diskStorage({
 
 const upload = multer({ 
   storage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB limit
+  limits: { fileSize: 50 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     if (file.mimetype === 'application/pdf') {
       cb(null, true);
@@ -50,91 +54,92 @@ const upload = multer({
   }
 });
 
-const app = express();
-
-// Middleware
-app.use(cors());
-app.use(express.json());
-
-// Store for paper analysis results
-const paperStore = new Map();
-
 // ============================================
-// PDF Processing Utilities
+// Status Management
 // ============================================
 
-/**
- * Extract text from PDF using basic parsing
- * In production, use pdf-parse or similar library
- */
-async function extractTextFromPDF(pdfPath) {
-  const stats = fs.statSync(pdfPath);
+function createInitialStatus(taskId) {
   return {
-    text: `[PDF Content from ${path.basename(pdfPath)}]`,
-    pages: Math.ceil(stats.size / 50000),
-    size: stats.size
+    task_id: taskId,
+    stage: 'INTAKE',
+    stage_status: 'idle',
+    progress: {
+      papers_processed: 0,
+      papers_total: 0,
+      topics_generated: 0
+    },
+    result: null,
+    messages: [
+      {
+        timestamp: new Date().toISOString(),
+        from: 'system',
+        content: '任务已创建，等待上传参考论文'
+      }
+    ],
+    error: null,
+    updated_at: new Date().toISOString()
   };
 }
 
-// ============================================
-// AI Integration with OpenClaw
-// ============================================
-
-/**
- * Analyze paper content using AI
- * Creates a structured analysis request for OpenClaw to process
- */
-async function analyzePaperWithAI(paperId, pdfPath, extractedText) {
-  console.log(`[${paperId}] Starting AI analysis...`);
+function updateStatus(taskId, updates) {
+  const statusPath = path.join(PAPERS_DIR, taskId, 'status.json');
+  if (!fs.existsSync(statusPath)) {
+    return null;
+  }
   
-  const analysisPrompt = `
-你是学术论文分析专家。请分析以下论文内容，提取元数据并推荐研究选题。
-
-论文内容：
-${extractedText.substring(0, 5000)}
-
-请以JSON格式返回分析结果：
-{
-  "metadata": {
-    "title": "论文标题",
-    "authors": ["作者1", "作者2"],
-    "abstract": "摘要内容",
-    "keywords": ["关键词1", "关键词2", "关键词3"],
-    "contentSummary": "内容摘要（100字以内）"
-  },
-  "topicCandidates": [
-    {
-      "title": "选题1标题",
-      "score": 85,
-      "summary": "选题简述",
-      "rationale": "理论依据",
-      "feasibility": "可行性评估"
-    }
-  ]
+  const status = JSON.parse(fs.readFileSync(statusPath, 'utf-8'));
+  const updated = { ...status, ...updates, updated_at: new Date().toISOString() };
+  fs.writeFileSync(statusPath, JSON.stringify(updated, null, 2));
+  return updated;
 }
 
-只返回JSON，不要其他内容。
-`;
+function getStatus(taskId) {
+  const statusPath = path.join(PAPERS_DIR, taskId, 'status.json');
+  if (!fs.existsSync(statusPath)) {
+    return null;
+  }
+  return JSON.parse(fs.readFileSync(statusPath, 'utf-8'));
+}
 
-  const analysisRequest = {
-    id: paperId,
-    prompt: analysisPrompt,
-    status: 'pending',
-    createdAt: new Date().toISOString(),
-    pdfPath,
-    extractedText: extractedText.substring(0, 10000)
-  };
+function addMessage(taskId, from, content) {
+  const status = getStatus(taskId);
+  if (!status) return null;
   
-  paperStore.set(paperId, {
-    ...paperStore.get(paperId),
-    analysisRequest,
-    status: 'analyzing'
+  status.messages.push({
+    timestamp: new Date().toISOString(),
+    from,
+    content
   });
   
-  return {
-    requestId: paperId,
-    status: 'analyzing'
-  };
+  return updateStatus(taskId, { messages: status.messages });
+}
+
+// ============================================
+// Session Trigger
+// ============================================
+
+function triggerOpenClawSession(taskId) {
+  console.log(`[${taskId}] Triggering OpenClaw session...`);
+  
+  // Update status to processing
+  updateStatus(taskId, {
+    stage_status: 'processing',
+    messages: [{
+      timestamp: new Date().toISOString(),
+      from: 'system',
+      content: '正在启动 OpenClaw Session...'
+    }]
+  });
+  
+  // Create workspace directory
+  const workspaceDir = path.join(PAPERS_DIR, taskId, 'workspace');
+  if (!fs.existsSync(workspaceDir)) {
+    fs.mkdirSync(workspaceDir, { recursive: true });
+  }
+  
+  // The actual session spawning will be done by the frontend
+  // This backend just manages file storage and status
+  return { success: true, taskId };
 }
 
 // ============================================
@@ -145,155 +150,205 @@ app.get('/api/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
-    service: 'paper-dashboard-backend'
+    service: 'paper-dashboard-backend',
+    shared_dir: PAPERS_DIR
   });
 });
 
-app.post('/api/papers/analyze', upload.single('paper'), async (req, res) => {
-  try {
-    if (!req.file) {
-      return res.status(400).json({ error: 'No paper file uploaded' });
-    }
-
-    const paperId = crypto.randomUUID();
-    const pdfPath = req.file.path;
-    
-    console.log(`[${paperId}] Processing paper: ${req.file.originalname}`);
-    
-    paperStore.set(paperId, {
-      id: paperId,
-      originalName: req.file.originalname,
-      filename: req.file.filename,
-      pdfPath,
-      status: 'extracting',
-      createdAt: new Date().toISOString()
-    });
-    
-    const extracted = await extractTextFromPDF(pdfPath);
-    paperStore.get(paperId).extractedText = extracted.text;
-    paperStore.get(paperId).pages = extracted.pages;
-    paperStore.get(paperId).status = 'analyzing';
-    
-    const result = await analyzePaperWithAI(paperId, pdfPath, extracted.text);
-    
-    res.json({
-      paperId,
-      status: 'analyzing',
-      message: 'Paper uploaded and analysis started',
-      ...result
-    });
-    
-  } catch (error) {
-    console.error('Error processing paper:', error);
-    res.status(500).json({ error: error.message });
-  }
+/**
+ * Create a new paper task
+ */
+app.post('/api/tasks', (req, res) => {
+  const taskId = crypto.randomUUID();
+  const taskDir = path.join(PAPERS_DIR, taskId);
+  
+  // Create task directory structure
+  fs.mkdirSync(path.join(taskDir, 'input'), { recursive: true });
+  fs.mkdirSync(path.join(taskDir, 'workspace'), { recursive: true });
+  
+  // Initialize status
+  const status = createInitialStatus(taskId);
+  fs.writeFileSync(
+    path.join(taskDir, 'status.json'),
+    JSON.stringify(status, null, 2)
+  );
+  
+  res.json({ task_id: taskId, status });
 });
 
-app.get('/api/papers/:id/status', (req, res) => {
-  const paper = paperStore.get(req.params.id);
+/**
+ * Upload paper to existing task
+ */
+app.post('/api/tasks/:taskId/papers', upload.single('paper'), async (req, res) => {
+  const { taskId } = req.params;
+  const taskDir = path.join(PAPERS_DIR, taskId);
   
-  if (!paper) {
-    return res.status(404).json({ error: 'Paper not found' });
+  if (!fs.existsSync(taskDir)) {
+    return res.status(404).json({ error: 'Task not found' });
   }
   
-  res.json({
-    id: paper.id,
-    status: paper.status,
-    originalName: paper.originalName,
-    pages: paper.pages,
-    createdAt: paper.createdAt
-  });
-});
-
-app.get('/api/papers/:id/result', async (req, res) => {
-  const paper = paperStore.get(req.params.id);
-  
-  if (!paper) {
-    return res.status(404).json({ error: 'Paper not found' });
+  if (!req.file) {
+    return res.status(400).json({ error: 'No paper file uploaded' });
   }
   
-  if (paper.status === 'analyzing' || paper.status === 'pending') {
-    return res.json({
-      id: paper.id,
-      status: paper.status,
-      message: 'Analysis in progress...'
-    });
-  }
+  const inputDir = path.join(taskDir, 'input');
+  const targetPath = path.join(inputDir, req.file.originalname);
   
-  if (paper.status === 'completed') {
-    return res.json({
-      id: paper.id,
-      status: 'completed',
-      result: paper.result
-    });
-  }
+  // Move file to input directory
+  fs.renameSync(req.file.path, targetPath);
   
-  res.json({
-    id: paper.id,
-    status: paper.status,
-    extractedText: paper.extractedText?.substring(0, 1000)
-  });
-});
-
-app.post('/api/papers/:id/feedback', async (req, res) => {
-  const paper = paperStore.get(req.params.id);
+  // Update status
+  const status = getStatus(taskId);
+  const papers_total = (status?.progress?.papers_total || 0) + 1;
   
-  if (!paper) {
-    return res.status(404).json({ error: 'Paper not found' });
-  }
-  
-  const { feedback } = req.body;
-  
-  if (!feedback) {
-    return res.status(400).json({ error: 'Feedback text required' });
-  }
-  
-  console.log(`[${paper.id}] Processing feedback: ${feedback}`);
-  
-  if (!paper.feedbackHistory) {
-    paper.feedbackHistory = [];
-  }
-  paper.feedbackHistory.push({
-    feedback,
-    timestamp: new Date().toISOString()
+  updateStatus(taskId, {
+    progress: { ...status?.progress, papers_total },
+    messages: [{
+      timestamp: new Date().toISOString(),
+      from: 'system',
+      content: `已上传参考论文: ${req.file.originalname}`
+    }]
   });
   
   res.json({
-    id: paper.id,
-    status: 'feedback_received',
-    message: 'Feedback received. AI regeneration would occur here.',
-    feedbackRound: paper.feedbackHistory.length
+    success: true,
+    paper_name: req.file.originalname,
+    papers_total
   });
 });
 
-app.get('/api/papers', (req, res) => {
-  const papers = Array.from(paperStore.values()).map(p => ({
-    id: p.id,
-    originalName: p.originalName,
-    status: p.status,
-    pages: p.pages,
-    createdAt: p.createdAt
-  }));
+/**
+ * Get task status
+ */
+app.get('/api/tasks/:taskId/status', (req, res) => {
+  const { taskId } = req.params;
+  const status = getStatus(taskId);
   
-  res.json({ papers });
+  if (!status) {
+    return res.status(404).json({ error: 'Task not found' });
+  }
+  
+  res.json(status);
 });
 
-app.delete('/api/papers/:id', (req, res) => {
-  const paper = paperStore.get(req.params.id);
+/**
+ * Trigger OpenClaw Session for a task
+ */
+app.post('/api/tasks/:taskId/trigger', async (req, res) => {
+  const { taskId } = req.params;
+  const taskDir = path.join(PAPERS_DIR, taskId);
   
-  if (!paper) {
-    return res.status(404).json({ error: 'Paper not found' });
+  if (!fs.existsSync(taskDir)) {
+    return res.status(404).json({ error: 'Task not found' });
   }
   
-  if (paper.pdfPath && fs.existsSync(paper.pdfPath)) {
-    fs.unlinkSync(paper.pdfPath);
+  const status = getStatus(taskId);
+  if (status.progress.papers_total === 0) {
+    return res.status(400).json({ error: 'No papers uploaded yet' });
   }
   
-  paperStore.delete(req.params.id);
+  // Trigger session
+  const result = triggerOpenClawSession(taskId);
+  
+  res.json(result);
+});
+
+/**
+ * List all tasks
+ */
+app.get('/api/tasks', (req, res) => {
+  const tasks = fs.readdirSync(PAPERS_DIR)
+    .filter(f => {
+      const stat = fs.statSync(path.join(PAPERS_DIR, f));
+      return stat.isDirectory();
+    })
+    .map(taskId => {
+      const status = getStatus(taskId);
+      return {
+        task_id: taskId,
+        stage: status?.stage,
+        stage_status: status?.stage_status,
+        papers_total: status?.progress?.papers_total,
+        updated_at: status?.updated_at
+      };
+    })
+    .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+  
+  res.json({ tasks });
+});
+
+/**
+ * Get topics for a task
+ */
+app.get('/api/tasks/:taskId/topics', (req, res) => {
+  const { taskId } = req.params;
+  const topicsPath = path.join(PAPERS_DIR, taskId, 'topics.json');
+  
+  if (!fs.existsSync(topicsPath)) {
+    return res.json({ topics: [] });
+  }
+  
+  const topics = JSON.parse(fs.readFileSync(topicsPath, 'utf-8'));
+  res.json({ topics });
+});
+
+/**
+ * Save selected topic
+ */
+app.post('/api/tasks/:taskId/topics', (req, res) => {
+  const { taskId } = req.params;
+  const { topic } = req.body;
+  
+  if (!topic) {
+    return res.status(400).json({ error: 'Topic is required' });
+  }
+  
+  const topicsPath = path.join(PAPERS_DIR, taskId, 'topics.json');
+  fs.writeFileSync(topicsPath, JSON.stringify(topic, null, 2));
+  
+  updateStatus(taskId, {
+    stage_status: 'waiting_confirm',
+    result: { selected_topic: topic }
+  });
   
   res.json({ success: true });
 });
 
+/**
+ * Send message to task (for Dashboard → Session communication)
+ */
+app.post('/api/tasks/:taskId/messages', (req, res) => {
+  const { taskId } = req.params;
+  const { action, data } = req.body;
+  
+  if (!action) {
+    return res.status(400).json({ error: 'Action is required' });
+  }
+  
+  // Add message to status
+  addMessage(taskId, 'user', `Action: ${action}, Data: ${JSON.stringify(data)}`);
+  
+  res.json({ success: true, action });
+});
+
+/**
+ * Delete task
+ */
+app.delete('/api/tasks/:taskId', (req, res) => {
+  const { taskId } = req.params;
+  const taskDir = path.join(PAPERS_DIR, taskId);
+  
+  if (!fs.existsSync(taskDir)) {
+    return res.status(404).json({ error: 'Task not found' });
+  }
+  
+  // Delete all files
+  fs.rmSync(taskDir, { recursive: true, force: true });
+  
+  res.json({ success: true });
+});
+
+// Error handling
 app.use((error, req, res, next) => {
   console.error('Server error:', error);
   res.status(500).json({ error: error.message });
@@ -302,19 +357,21 @@ app.use((error, req, res, next) => {
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`
 ╔════════════════════════════════════════════════════════════╗
-║  Paper Dashboard Backend - Running                        ║
-║  Server: http://0.0.0.0:${PORT}                            ║
-║  Upload: ${UPLOAD_DIR}                          ║
+║  Paper Dashboard Backend - Hybrid Session                ║
+║  ─────────────────────────────────────────────────────  ║
+║  Server:    http://0.0.0.0:${PORT}                        ║
+║  Shared:    ${PAPERS_DIR}  ║
 ╚════════════════════════════════════════════════════════════╝
   `);
   console.log('Endpoints:');
-  console.log('  GET  /api/health');
-  console.log('  POST /api/papers/analyze');
-  console.log('  GET  /api/papers/:id/status');
-  console.log('  GET  /api/papers/:id/result');
-  console.log('  POST /api/papers/:id/feedback');
-  console.log('  GET  /api/papers');
-  console.log('  DELETE /api/papers/:id');
+  console.log('  POST /api/tasks                    - Create new task');
+  console.log('  POST /api/tasks/:id/papers        - Upload paper');
+  console.log('  GET  /api/tasks/:id/status        - Get task status');
+  console.log('  POST /api/tasks/:id/trigger       - Trigger OpenClaw session');
+  console.log('  GET  /api/tasks                    - List all tasks');
+  console.log('  GET  /api/tasks/:id/topics        - Get topics');
+  console.log('  POST /api/tasks/:id/topics        - Save selected topic');
+  console.log('  POST /api/tasks/:id/messages      - Send message to session');
 });
 
 module.exports = app;
