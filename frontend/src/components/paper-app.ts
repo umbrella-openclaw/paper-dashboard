@@ -9,7 +9,9 @@ import './stat-card.ts';
 import './stage-navigator.ts';
 import './config-stage.ts';
 
-export type WritingStage = 'CONFIG' | 'LITERATURE_REVIEW' | 'METHODS' | 'RESULTS' | 'DISCUSSION' | 'COMPLETED';
+export type WritingStage = 'INTAKE' | 'LITERATURE' | 'OUTLINE' | 'DATA_REQUIREMENTS' | 'DRAFTING' | 'POLISHING' | 'REVIEW' | 'FINALIZE';
+
+const STAGES: WritingStage[] = ['INTAKE', 'LITERATURE', 'OUTLINE', 'DATA_REQUIREMENTS', 'DRAFTING', 'POLISHING', 'REVIEW', 'FINALIZE'];
 
 @customElement('paper-app')
 export class PaperApp extends LitElement {
@@ -78,6 +80,38 @@ export class PaperApp extends LitElement {
     .workflow-active {
       padding: var(--space-6);
     }
+
+    .preview-banner {
+      background: #fef3c7;
+      border: 1px solid #fde68a;
+      border-radius: var(--radius-lg);
+      padding: var(--space-3) var(--space-4);
+      margin-bottom: var(--space-4);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: var(--text-sm);
+      color: #92400e;
+    }
+
+    .preview-banner strong {
+      color: #78350f;
+    }
+
+    .preview-banner button {
+      background: #f59e0b;
+      border: none;
+      color: white;
+      padding: var(--space-2) var(--space-3);
+      border-radius: var(--radius-md);
+      font-size: var(--text-xs);
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .preview-banner button:hover {
+      background: #d97706;
+    }
   `;
 
   @state() private papers: Paper[] = [];
@@ -89,10 +123,13 @@ export class PaperApp extends LitElement {
   @state() private loading = true;
   @state() private showUploader = false;
   
+  // Paper writing workflow state
   @state() private workflowActive = false;
-  @state() private currentStage: WritingStage = 'CONFIG';
+  @state() private currentStage: WritingStage = 'INTAKE';
   @state() private completedStages: WritingStage[] = [];
   @state() private configReady = false;
+  @state() private previewMode = false;
+  @state() private previewStage: WritingStage | null = null;
 
   async connectedCallback() {
     super.connectedCallback();
@@ -150,11 +187,14 @@ export class PaperApp extends LitElement {
     this.stats = await api.getStats();
   }
   
+  // Workflow handlers
   private onCreatePaper() {
     this.workflowActive = true;
-    this.currentStage = 'CONFIG';
+    this.currentStage = 'INTAKE';
     this.completedStages = [];
     this.configReady = false;
+    this.previewMode = false;
+    this.previewStage = null;
   }
   
   private onConfigReadyChange(e: CustomEvent<boolean>) {
@@ -162,43 +202,115 @@ export class PaperApp extends LitElement {
   }
   
   private advanceStage() {
-    if (!this.configReady && this.currentStage === 'CONFIG') {
-      alert('请先完成配置阶段的选题确认');
+    if (!this.configReady && this.currentStage === 'INTAKE') {
+      alert('请先完成 Intake 阶段的选题确认');
       return;
     }
     
-    const stages: WritingStage[] = ['CONFIG', 'LITERATURE_REVIEW', 'METHODS', 'RESULTS', 'DISCUSSION', 'COMPLETED'];
-    const currentIndex = stages.indexOf(this.currentStage);
+    const currentIndex = STAGES.indexOf(this.currentStage);
     
-    if (currentIndex < stages.length - 1) {
+    if (currentIndex < STAGES.length - 1) {
       if (!this.completedStages.includes(this.currentStage)) {
         this.completedStages = [...this.completedStages, this.currentStage];
       }
-      this.currentStage = stages[currentIndex + 1];
+      this.currentStage = STAGES[currentIndex + 1];
       this.configReady = false;
+      this.previewMode = false;
+      this.previewStage = null;
     }
   }
   
   private rollbackStage() {
-    const stages: WritingStage[] = ['CONFIG', 'LITERATURE_REVIEW', 'METHODS', 'RESULTS', 'DISCUSSION', 'COMPLETED'];
-    const currentIndex = stages.indexOf(this.currentStage);
+    const currentIndex = STAGES.indexOf(this.currentStage);
     
     if (currentIndex > 0) {
-      this.currentStage = stages[currentIndex - 1];
-      this.completedStages = this.completedStages.filter(s => stages.indexOf(s) < currentIndex - 1);
+      this.currentStage = STAGES[currentIndex - 1];
+      this.completedStages = this.completedStages.filter(s => STAGES.indexOf(s) < currentIndex - 1);
       this.configReady = true;
+      this.previewMode = false;
+      this.previewStage = null;
+    }
+  }
+
+  private onPreviewStage() {
+    this.previewMode = true;
+    this.previewStage = this.currentStage;
+  }
+
+  private closePreview() {
+    this.previewMode = false;
+    this.previewStage = null;
+  }
+
+  private selectStage(e: CustomEvent<WritingStage>) {
+    const stage = e.detail;
+    if (stage === this.currentStage) {
+      this.previewMode = false;
+      this.previewStage = null;
+    } else {
+      this.previewMode = true;
+      this.previewStage = stage;
     }
   }
   
   private canAdvance(): boolean {
-    if (this.currentStage === 'CONFIG') {
+    if (this.currentStage === 'INTAKE') {
       return this.configReady;
     }
     return true;
   }
   
   private canRollback(): boolean {
-    return this.currentStage !== 'CONFIG';
+    return this.currentStage !== 'INTAKE';
+  }
+
+  private getStageDisplayName(stage: WritingStage): string {
+    const names: Record<WritingStage, string> = {
+      'INTAKE': 'Intake - 校验输入',
+      'LITERATURE': 'Literature - 文献检索',
+      'OUTLINE': 'Outline - 确定结构',
+      'DATA_REQUIREMENTS': 'Data Req. - 算例需求',
+      'DRAFTING': 'Drafting - 章节草稿',
+      'POLISHING': 'Polishing - PoF润色',
+      'REVIEW': 'Review - 质量门禁',
+      'FINALIZE': 'Finalize - 投稿封装'
+    };
+    return names[stage] || stage;
+  }
+
+  private renderStageContent(stage: WritingStage) {
+    if (stage === 'INTAKE') {
+      return html`
+        <config-stage
+          @config-ready-change=${this.onConfigReadyChange}
+        ></config-stage>
+      `;
+    }
+    
+    // For other stages, show placeholder
+    return html`
+      <div class="empty-state">
+        <h2>${this.getStageDisplayName(stage)}</h2>
+        <p>该阶段开发中...</p>
+        <p style="margin-top: var(--space-4); font-size: var(--text-sm); color: var(--color-text-tertiary);">
+          由 ${this.getStageAgent(stage)} 负责
+        </p>
+      </div>
+    `;
+  }
+
+  private getStageAgent(stage: WritingStage): string {
+    const agents: Record<WritingStage, string> = {
+      'INTAKE': 'Orchestrator',
+      'LITERATURE': 'Agent A (学术架构师)',
+      'OUTLINE': 'Agent A (学术架构师)',
+      'DATA_REQUIREMENTS': 'Agent B (物理-数据映射师)',
+      'DRAFTING': 'Agent C (PoF执笔人)',
+      'POLISHING': 'Agent C (PoF润色人)',
+      'REVIEW': 'Orchestrator',
+      'FINALIZE': 'Orchestrator'
+    };
+    return agents[stage] || 'TBD';
   }
 
   render() {
@@ -220,6 +332,8 @@ export class PaperApp extends LitElement {
               .canRollback=${this.canRollback()}
               @advance-stage=${this.advanceStage}
               @rollback-stage=${this.rollbackStage}
+              @preview-stage=${this.onPreviewStage}
+              @select-stage=${this.selectStage}
             ></stage-navigator>
           </div>
           
@@ -234,15 +348,14 @@ export class PaperApp extends LitElement {
           </aside>
           
           <main class="workflow-active">
-            ${this.currentStage === 'CONFIG' ? html`
-              <config-stage
-                @config-ready-change=${this.onConfigReadyChange}
-              ></config-stage>
-            ` : html`
-              <div class="empty-state">
-                <h2>${this.currentStage} 阶段</h2>
-                <p>该阶段开发中...</p>
+            ${this.previewMode && this.previewStage ? html`
+              <div class="preview-banner">
+                <span>👁 预览模式 - 正在查看：<strong>${this.getStageDisplayName(this.previewStage)}</strong></span>
+                <button @click=${this.closePreview}>退出预览</button>
               </div>
+              ${this.renderStageContent(this.previewStage)}
+            ` : html`
+              ${this.renderStageContent(this.currentStage)}
             `}
           </main>
         ` : html`
