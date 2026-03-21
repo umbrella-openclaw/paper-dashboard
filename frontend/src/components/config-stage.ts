@@ -585,36 +585,76 @@ export class ConfigStage extends LitElement {
       return;
     }
     
+    this.debug('log', 'loadExistingTask_start');
+    
+    // First check localStorage for saved taskId
     const savedTaskId = this.loadTaskId();
-    this.debug('log', 'loadExistingTask_start', { savedTaskId, apiConnected: this.apiConnected });
     
-    if (!savedTaskId) {
-      this.debug('log', 'loadExistingTask_noSavedId');
-      return;
-    }
-    
+    // Get all tasks and find the best one to load
     try {
-      const response = await apiFetch(`${API_BASE}/api/tasks/${savedTaskId}/status`);
-      this.debug('log', 'loadExistingTask_response', { status: response.status });
-      
+      const response = await apiFetch(`${API_BASE}/api/tasks`);
       if (response.ok) {
-        const status = await response.json();
-        if (status) {
-          this.taskId = savedTaskId;
-          this.taskStatus = status;
-          this.debug('log', 'loadExistingTask_success', { 
-            taskId: savedTaskId, 
-            papers: status.progress?.papers_total 
+        const data = await response.json();
+        const tasks = data.tasks || [];
+        
+        this.debug('log', 'loadExistingTask_foundTasks', { count: tasks.length });
+        
+        // Find the best task: prefer waiting_confirm > processing > idle with papers
+        let bestTask = null;
+        
+        // Priority 1: waiting_confirm (has results)
+        bestTask = tasks.find(t => t.stage_status === 'waiting_confirm' && t.papers_total > 0);
+        
+        // Priority 2: processing (in progress)
+        if (!bestTask) {
+          bestTask = tasks.find(t => t.stage_status === 'processing' && t.papers_total > 0);
+        }
+        
+        // Priority 3: idle with papers (savedTaskId if it has papers)
+        if (!bestTask && savedTaskId) {
+          bestTask = tasks.find(t => t.task_id === savedTaskId && t.papers_total > 0);
+        }
+        
+        // Priority 4: any task with papers
+        if (!bestTask) {
+          bestTask = tasks.find(t => t.papers_total > 0);
+        }
+        
+        // Priority 5: saved task even if 0 papers
+        if (!bestTask && savedTaskId) {
+          bestTask = tasks.find(t => t.task_id === savedTaskId);
+        }
+        
+        // Priority 6: most recent task
+        if (!bestTask && tasks.length > 0) {
+          bestTask = tasks[0];
+        }
+        
+        if (bestTask) {
+          this.debug('log', 'loadExistingTask_loading', { 
+            taskId: bestTask.task_id, 
+            papers: bestTask.papers_total,
+            status: bestTask.stage_status 
           });
-          return;
+          
+          // Get full status
+          const statusResponse = await apiFetch(`${API_BASE}/api/tasks/${bestTask.task_id}/status`);
+          if (statusResponse.ok) {
+            const status = await statusResponse.json();
+            this.taskId = bestTask.task_id;
+            this.taskStatus = status;
+            this.saveTaskId(bestTask.task_id);
+            this.debug('log', 'loadExistingTask_success', status);
+            return;
+          }
         }
       }
     } catch (e) {
       this.debug('error', 'loadExistingTask_error', { error: String(e) });
     }
     
-    // Task not found or invalid, clear it
-    this.debug('log', 'loadExistingTask_clearingInvalid');
+    // No valid task found
+    this.debug('log', 'loadExistingTask_noValidTask');
     this.saveTaskId(null);
     this.taskId = null;
     this.taskStatus = null;
