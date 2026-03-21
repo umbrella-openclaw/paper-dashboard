@@ -6,7 +6,10 @@ import './paper-sidebar.ts';
 import './paper-grid.ts';
 import './paper-uploader.ts';
 import './stat-card.ts';
-import './search-bar.ts';
+import './stage-navigator.ts';
+import './config-stage.ts';
+
+export type WritingStage = 'CONFIG' | 'LITERATURE_REVIEW' | 'METHODS' | 'RESULTS' | 'DISCUSSION' | 'COMPLETED';
 
 @customElement('paper-app')
 export class PaperApp extends LitElement {
@@ -20,7 +23,7 @@ export class PaperApp extends LitElement {
     .layout {
       display: grid;
       grid-template-columns: 280px 1fr;
-      grid-template-rows: 64px 1fr;
+      grid-template-rows: 64px auto 1fr;
       min-height: 100dvh;
     }
     
@@ -40,29 +43,15 @@ export class PaperApp extends LitElement {
       border-bottom: 1px solid var(--color-border);
     }
     
-    .stats-bar {
+    .stage-bar {
       grid-column: 1 / -1;
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: var(--space-4);
       padding: var(--space-4) var(--space-6);
       background: var(--color-bg);
       border-bottom: 1px solid var(--color-border-light);
     }
     
-    @media (max-width: 1024px) {
-      .stats-bar {
-        grid-template-columns: repeat(2, 1fr);
-      }
-    }
-    
-    @media (max-width: 640px) {
-      .stats-bar {
-        grid-template-columns: 1fr;
-      }
-    }
-    
     aside {
+      grid-row: 3;
       border-right: 1px solid var(--color-border);
       overflow-y: auto;
       background: var(--color-surface);
@@ -85,6 +74,10 @@ export class PaperApp extends LitElement {
       color: var(--color-text-secondary);
       margin-bottom: var(--space-2);
     }
+    
+    .workflow-active {
+      padding: var(--space-6);
+    }
   `;
 
   @state() private papers: Paper[] = [];
@@ -95,6 +88,11 @@ export class PaperApp extends LitElement {
   @state() private searchQuery = '';
   @state() private loading = true;
   @state() private showUploader = false;
+  
+  @state() private workflowActive = false;
+  @state() private currentStage: WritingStage = 'CONFIG';
+  @state() private completedStages: WritingStage[] = [];
+  @state() private configReady = false;
 
   async connectedCallback() {
     super.connectedCallback();
@@ -151,6 +149,57 @@ export class PaperApp extends LitElement {
     await this.loadPapers();
     this.stats = await api.getStats();
   }
+  
+  private onCreatePaper() {
+    this.workflowActive = true;
+    this.currentStage = 'CONFIG';
+    this.completedStages = [];
+    this.configReady = false;
+  }
+  
+  private onConfigReadyChange(e: CustomEvent<boolean>) {
+    this.configReady = e.detail;
+  }
+  
+  private advanceStage() {
+    if (!this.configReady && this.currentStage === 'CONFIG') {
+      alert('请先完成配置阶段的选题确认');
+      return;
+    }
+    
+    const stages: WritingStage[] = ['CONFIG', 'LITERATURE_REVIEW', 'METHODS', 'RESULTS', 'DISCUSSION', 'COMPLETED'];
+    const currentIndex = stages.indexOf(this.currentStage);
+    
+    if (currentIndex < stages.length - 1) {
+      if (!this.completedStages.includes(this.currentStage)) {
+        this.completedStages = [...this.completedStages, this.currentStage];
+      }
+      this.currentStage = stages[currentIndex + 1];
+      this.configReady = false;
+    }
+  }
+  
+  private rollbackStage() {
+    const stages: WritingStage[] = ['CONFIG', 'LITERATURE_REVIEW', 'METHODS', 'RESULTS', 'DISCUSSION', 'COMPLETED'];
+    const currentIndex = stages.indexOf(this.currentStage);
+    
+    if (currentIndex > 0) {
+      this.currentStage = stages[currentIndex - 1];
+      this.completedStages = this.completedStages.filter(s => stages.indexOf(s) < currentIndex - 1);
+      this.configReady = true;
+    }
+  }
+  
+  private canAdvance(): boolean {
+    if (this.currentStage === 'CONFIG') {
+      return this.configReady;
+    }
+    return true;
+  }
+  
+  private canRollback(): boolean {
+    return this.currentStage !== 'CONFIG';
+  }
 
   render() {
     return html`
@@ -162,35 +211,79 @@ export class PaperApp extends LitElement {
           ></paper-header>
         </header>
         
-        <div class="stats-bar">
-          <stat-card label="Total Papers" .value=${this.stats.total_papers} icon="file-text"></stat-card>
-          <stat-card label="This Week" .value=${this.stats.papers_this_week} icon="calendar"></stat-card>
-          <stat-card label="Folders" .value=${this.stats.total_folders} icon="folder"></stat-card>
-          <stat-card label="Tags" .value=${this.stats.total_tags} icon="tag"></stat-card>
-        </div>
-        
-        <aside>
-          <paper-sidebar
-            .folders=${this.folders}
-            .tags=${this.tags}
-            .selectedFolderId=${this.selectedFolderId}
-            @folder-select=${this.onFolderSelect}
-          ></paper-sidebar>
-        </aside>
-        
-        <main>
-          ${this.loading
-            ? html`<div class="empty-state"><p>Loading...</p></div>`
-            : this.papers.length === 0
-              ? html`
-                  <div class="empty-state">
-                    <h2>No papers yet</h2>
-                    <p>Upload your first paper to get started</p>
-                  </div>
-                `
-              : html`<paper-grid .papers=${this.papers} @delete=${this.onDeletePaper}></paper-grid>`
-          }
-        </main>
+        ${this.workflowActive ? html`
+          <div class="stage-bar">
+            <stage-navigator
+              .currentStage=${this.currentStage}
+              .completedStages=${this.completedStages}
+              .canAdvance=${this.canAdvance()}
+              .canRollback=${this.canRollback()}
+              @advance-stage=${this.advanceStage}
+              @rollback-stage=${this.rollbackStage}
+            ></stage-navigator>
+          </div>
+          
+          <aside>
+            <paper-sidebar
+              .folders=${this.folders}
+              .tags=${this.tags}
+              .selectedFolderId=${this.selectedFolderId}
+              @folder-select=${this.onFolderSelect}
+              @create-paper=${this.onCreatePaper}
+            ></paper-sidebar>
+          </aside>
+          
+          <main class="workflow-active">
+            ${this.currentStage === 'CONFIG' ? html`
+              <config-stage
+                @config-ready-change=${this.onConfigReadyChange}
+              ></config-stage>
+            ` : html`
+              <div class="empty-state">
+                <h2>${this.currentStage} 阶段</h2>
+                <p>该阶段开发中...</p>
+              </div>
+            `}
+          </main>
+        ` : html`
+          <div class="stage-bar" style="background: var(--color-surface);">
+            <div style="display: flex; align-items: center; justify-content: space-between;">
+              <span style="font-size: var(--text-sm); color: var(--color-text-tertiary);">
+                当前没有进行中的论文写作任务
+              </span>
+              <button 
+                @click=${this.onCreatePaper}
+                style="padding: var(--space-2) var(--space-4); background: var(--color-accent); border: none; border-radius: var(--radius-md); color: white; font-size: var(--text-sm); font-weight: 600; cursor: pointer;"
+              >
+                创建新论文
+              </button>
+            </div>
+          </div>
+          
+          <aside>
+            <paper-sidebar
+              .folders=${this.folders}
+              .tags=${this.tags}
+              .selectedFolderId=${this.selectedFolderId}
+              @folder-select=${this.onFolderSelect}
+              @create-paper=${this.onCreatePaper}
+            ></paper-sidebar>
+          </aside>
+          
+          <main>
+            ${this.loading
+              ? html`<div class="empty-state"><p>Loading...</p></div>`
+              : this.papers.length === 0
+                ? html`
+                    <div class="empty-state">
+                      <h2>No papers yet</h2>
+                      <p>Upload your first paper to get started</p>
+                    </div>
+                  `
+                : html`<paper-grid .papers=${this.papers} @delete=${this.onDeletePaper}></paper-grid>`
+            }
+          </main>
+        `}
       </div>
       
       ${this.showUploader ? html`

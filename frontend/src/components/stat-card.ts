@@ -1,4 +1,5 @@
 import { LitElement, html, css } from 'lit';
+import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { customElement, property } from 'lit/decorators.js';
 
 @customElement('stat-card')
@@ -80,7 +81,7 @@ export class StatCard extends LitElement {
       <div class="card">
         <div class="icon-wrap">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            ${html([this.getIcon()])}
+            ${unsafeHTML(this.getIcon())}
           </svg>
         </div>
         <div class="info">

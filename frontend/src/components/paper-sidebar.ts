@@ -13,6 +13,29 @@ export class PaperSidebar extends LitElement {
     .sidebar {
       padding: var(--space-4);
     }
+
+    .create-paper {
+      width: 100%;
+      margin-bottom: var(--space-6);
+      padding: var(--space-3) var(--space-4);
+      border: 1px solid var(--color-accent);
+      border-radius: var(--radius-lg);
+      background: var(--color-accent);
+      color: #fff;
+      font-size: var(--text-sm);
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform var(--transition-fast), background var(--transition-fast), border-color var(--transition-fast);
+    }
+
+    .create-paper:hover {
+      background: var(--color-accent-hover);
+      border-color: var(--color-accent-hover);
+    }
+
+    .create-paper:active {
+      transform: scale(0.98);
+    }
     
     h3 {
       font-size: var(--text-xs);
@@ -94,9 +117,15 @@ export class PaperSidebar extends LitElement {
     this.dispatchEvent(new CustomEvent('folder-select', { detail: id }));
   }
 
+  private createPaper() {
+    this.dispatchEvent(new CustomEvent('create-paper'));
+  }
+
   render() {
     return html`
       <div class="sidebar">
+        <button class="create-paper" @click=${this.createPaper}>创建新论文</button>
+
         <div class="section">
           <h3>Folders</h3>
           <div class="nav-item ${this.selectedFolderId === null ? 'active' : ''}"

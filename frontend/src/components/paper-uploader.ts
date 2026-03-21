@@ -176,7 +176,7 @@ export class PaperUploader extends LitElement {
 
   @property({ type: Array }) folders: Folder[] = [];
   @state() private file: File | null = null;
-  @state() private title = '';
+  @state() private paperTitle = '';
   @state() private authors = '';
   @state() private abstract = '';
   @state() private journal = '';
@@ -194,8 +194,8 @@ export class PaperUploader extends LitElement {
     const input = e.target as HTMLInputElement;
     if (input.files?.[0]) {
       this.file = input.files[0];
-      if (!this.title) {
-        this.title = this.file.name.replace(/\.pdf$/i, '');
+      if (!this.paperTitle) {
+        this.paperTitle = this.file.name.replace(/\.pdf$/i, '');
       }
     }
   }
@@ -213,7 +213,7 @@ export class PaperUploader extends LitElement {
     try {
       const form = new FormData();
       form.append('file', this.file);
-      form.append('title', this.title);
+      form.append('title', this.paperTitle);
       form.append('authors', this.authors);
       form.append('abstract', this.abstract);
       form.append('journal', this.journal);
@@ -257,7 +257,7 @@ export class PaperUploader extends LitElement {
           
           <div class="field">
             <label>Title</label>
-            <input type="text" .value=${this.title} @input=${(e: Event) => this.title = (e.target as HTMLInputElement).value}>
+            <input type="text" .value=${this.paperTitle} @input=${(e: Event) => this.paperTitle = (e.target as HTMLInputElement).value}>
           </div>
           
           <div class="field">
