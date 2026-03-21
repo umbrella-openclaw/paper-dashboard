@@ -603,31 +603,31 @@ export class ConfigStage extends LitElement {
         let bestTask = null;
         
         // Priority 1: waiting_confirm (has results)
-        bestTask = tasks.find(t => t.stage_status === 'waiting_confirm' && t.papers_total > 0);
+        bestTask = tasks.find((t: any) => t.stage_status === 'waiting_confirm' && t.papers_total > 0);
         
         // Priority 2: processing (in progress)
         if (!bestTask) {
-          bestTask = tasks.find(t => t.stage_status === 'processing' && t.papers_total > 0);
+          bestTask = tasks.find((t: any) => t.stage_status === 'processing' && t.papers_total > 0);
         }
         
         // Priority 3: idle with papers (savedTaskId if it has papers)
         if (!bestTask && savedTaskId) {
-          bestTask = tasks.find(t => t.task_id === savedTaskId && t.papers_total > 0);
+          bestTask = tasks.find((t: any) => t.task_id === savedTaskId && t.papers_total > 0);
         }
         
         // Priority 4: any task with papers
         if (!bestTask) {
-          bestTask = tasks.find(t => t.papers_total > 0);
+          bestTask = tasks.find((t: any) => t.papers_total > 0);
         }
         
         // Priority 5: saved task even if 0 papers
         if (!bestTask && savedTaskId) {
-          bestTask = tasks.find(t => t.task_id === savedTaskId);
+          bestTask = tasks.find((t: any) => t.task_id === savedTaskId);
         }
         
         // Priority 6: most recent task
         if (!bestTask && tasks.length > 0) {
-          bestTask = tasks[0];
+          bestTask = tasks.length > 0 ? tasks[0] : null;
         }
         
         if (bestTask) {
