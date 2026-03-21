@@ -141,7 +141,21 @@ export class PaperApp extends LitElement {
     const savedTaskId = localStorage.getItem('paper-dashboard-workflow-task-id');
     if (savedTaskId) {
       console.log('[PaperApp] Found existing workflow task:', savedTaskId);
-      // Could load and resume the workflow here
+      // Workflow will be activated when config-stage emits task-loaded event
+      // after it successfully loads the task from the backend
+    }
+  }
+
+  private onTaskLoaded(e: CustomEvent) {
+    const { taskId, status } = e.detail;
+    console.log('[PaperApp] Task loaded from storage:', taskId, status);
+    // Activate the workflow since a valid task was restored
+    this.workflowActive = true;
+    this.currentStage = 'INTAKE';
+    // If the task already has a confirmed topic, mark config as ready
+    if (status?.stage_status === 'waiting_confirm' || status?.stage_status === 'completed') {
+      this.configReady = true;
+      this.completedStages = ['INTAKE'];
     }
   }
 
@@ -301,6 +315,7 @@ export class PaperApp extends LitElement {
         <config-stage
           @config-ready-change=${this.onConfigReadyChange}
           @topic-confirmed=${this.onTopicConfirmed}
+          @task-loaded=${this.onTaskLoaded}
         ></config-stage>
       `;
     }

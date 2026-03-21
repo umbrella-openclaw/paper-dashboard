@@ -261,6 +261,28 @@ app.post('/api/tasks/:taskId/topics', (req, res) => {
   res.json({ success: true });
 });
 
+app.post('/api/tasks/:taskId/messages', (req, res) => {
+  const { taskId } = req.params;
+  const { action, data } = req.body;
+  const status = getStatus(taskId);
+  if (!status) return res.status(404).json({ error: 'Task not found' });
+
+  if (action === 'feedback') {
+    const msg = {
+      timestamp: new Date().toISOString(),
+      from: 'user',
+      content: `[Feedback] ${data.feedback}`
+    };
+    updateStatus(taskId, {
+      messages: [...(status.messages || []), msg]
+    });
+    logger.api('info', 'User feedback received', { taskId, feedback: data.feedback });
+    res.json({ success: true });
+  } else {
+    res.status(400).json({ error: 'Unknown action' });
+  }
+});
+
 app.delete('/api/tasks/:taskId', (req, res) => {
   const taskDir = path.join(PAPERS_DIR, req.params.taskId);
   if (!fs.existsSync(taskDir)) return res.status(404).json({ error: 'Task not found' });

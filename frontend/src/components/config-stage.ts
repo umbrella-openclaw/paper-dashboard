@@ -37,12 +37,16 @@ interface TaskStatus {
 }
 
 interface TopicCandidate {
-  id: number;
+  id?: number;
   title: string;
-  score: number;
-  summary: string;
-  rationale: string;
-  feasibility: string;
+  score?: number;
+  summary?: string;
+  rationale?: string;
+  feasibility?: string;
+  // Additional fields from confirmed topics
+  researchObjective?: string;
+  expectedContribution?: string;
+  selectedCandidateId?: number | null;
 }
 
 interface SelectedTopic {
@@ -562,14 +566,17 @@ export class ConfigStage extends LitElement {
   // LocalStorage helpers
   private saveTaskId(taskId: string | null) {
     if (taskId) {
-      localStorage.setItem('paper-dashboard-task-id', taskId);
+      // Use same key as paper-app.ts for consistency
+      localStorage.setItem('paper-dashboard-workflow-task-id', taskId);
     } else {
-      localStorage.removeItem('paper-dashboard-task-id');
+      localStorage.removeItem('paper-dashboard-workflow-task-id');
     }
   }
 
   private loadTaskId(): string | null {
-    return localStorage.getItem('paper-dashboard-task-id');
+    // Check both keys for compatibility
+    return localStorage.getItem('paper-dashboard-workflow-task-id')
+        || localStorage.getItem('paper-dashboard-task-id');
   }
 
   private async loadExistingTask() {
@@ -645,6 +652,12 @@ export class ConfigStage extends LitElement {
             this.taskStatus = status;
             this.saveTaskId(bestTask.task_id);
             this.debug('log', 'loadExistingTask_success', status);
+            // Notify parent that a task was loaded so workflow can be activated
+            this.dispatchEvent(new CustomEvent('task-loaded', {
+              detail: { taskId: bestTask.task_id, status },
+              bubbles: true,
+              composed: true
+            }));
             return;
           }
         }
@@ -749,7 +762,15 @@ export class ConfigStage extends LitElement {
       const response = await apiFetch(`${API_BASE}/api/tasks/${this.taskId}/topics`);
       if (response.ok) {
         const data = await response.json();
-        this.topics = data.topics || [];
+        // Handle both generated topics (array) and confirmed topic (object with topic field)
+        if (Array.isArray(data.topics)) {
+          this.topics = data.topics;
+        } else if (data.topics && typeof data.topics === 'object') {
+          // Confirmed topic - wrap in array so it can be displayed
+          this.topics = [data.topics as TopicCandidate];
+        } else {
+          this.topics = [];
+        }
       }
     } catch (e) {
       console.error('Failed to load topics:', e);
@@ -822,7 +843,7 @@ export class ConfigStage extends LitElement {
         await this.createTask();
         console.log('[ConfigStage] Task created, taskId:', this.taskId);
         if (this.taskId) {
-          this.doUpload(files);
+          await this.doUpload(files);
         }
       } catch (e) {
         console.error('[ConfigStage] createTask failed:', e);
@@ -896,12 +917,12 @@ export class ConfigStage extends LitElement {
   }
 
   private selectTopic(candidate: TopicCandidate) {
-    this.selectedTopicId = candidate.id;
+    this.selectedTopicId = candidate.id ?? null;
     this.selectedTopic = {
       title: candidate.title,
       researchObjective: `针对 "${candidate.title}" 的核心问题，建立理论模型并进行数值验证。`,
       expectedContribution: '提出一种可行的研究方案，产出具有创新性的学术成果。',
-      selectedCandidateId: candidate.id
+      selectedCandidateId: candidate.id ?? null
     };
     this.notifyReadyState();
   }

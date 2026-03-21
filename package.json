@@ -1,0 +1,15 @@
+{
+  "name": "paper-dashboard",
+  "version": "1.0.0",
+  "description": "Paper Dashboard with OpenClaw AI",
+  "scripts": {
+    "test": "npx playwright test",
+    "test:api": "npx playwright test tests/api.spec.ts",
+    "test:workflow": "npx playwright test tests/workflow.spec.ts",
+    "test:debug": "npx playwright test --debug",
+    "test:ui": "npx playwright test --ui"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2"
+  }
+}
