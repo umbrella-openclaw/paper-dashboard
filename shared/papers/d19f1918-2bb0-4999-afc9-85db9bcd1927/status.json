@@ -4,7 +4,7 @@
   "stage_status": "processing",
   "progress": {
     "papers_processed": 0,
-    "papers_total": 0,
+    "papers_total": 1,
     "topics_generated": 0
   },
   "result": null,
@@ -13,8 +13,13 @@
       "timestamp": "2026-03-21T13:28:14.375Z",
       "from": "system",
       "content": "任务已创建"
+    },
+    {
+      "timestamp": "2026-03-21T13:38:57.402Z",
+      "from": "system",
+      "content": "已上传: Periyadurai ç­ - 2024 - Numerical modeling of magnetohydrodynamic non-Newtonian flow in a cross-slot.pdf"
     }
   ],
   "error": null,
-  "updated_at": "2026-03-21T13:32:33.011Z"
+  "updated_at": "2026-03-21T13:38:57.415Z"
 }

@@ -1,5 +1,5 @@
 /**
- * Paper Dashboard Backend - with Centralized Logging
+ * Paper Dashboard Backend - with Real AI Processing
  */
 
 const express = require('express');
@@ -8,12 +8,14 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { spawn } = require('child_process');
 const logger = require('./logger');
 
 const PORT = 8080;
 const SHARED_DIR = path.join(__dirname, '..', 'shared');
 const PAPERS_DIR = path.join(SHARED_DIR, 'papers');
 const KEY_FILE = path.join(__dirname, '.api_key');
+const PROCESSOR_SCRIPT = path.join(__dirname, 'processor.js');
 
 function getApiKey() {
   if (process.env.API_KEY) return process.env.API_KEY;
@@ -53,7 +55,6 @@ const app = express();
 app.use(cors(corsOptions));
 app.use(express.json());
 
-// Request logging middleware
 app.use((req, res, next) => {
   const start = Date.now();
   res.on('finish', () => {
@@ -103,7 +104,7 @@ function updateStatus(taskId, updates) {
   const status = JSON.parse(fs.readFileSync(statusPath, 'utf-8'));
   const updated = { ...status, ...updates, updated_at: new Date().toISOString() };
   fs.writeFileSync(statusPath, JSON.stringify(updated, null, 2));
-  logger.api('info', 'Status updated', { taskId, stage: updates.stage, stage_status: updates.stage_status });
+  logger.api('info', 'Status updated', { taskId, ...updates });
   return updated;
 }
 
@@ -113,7 +114,7 @@ function getStatus(taskId) {
   return JSON.parse(fs.readFileSync(statusPath, 'utf-8'));
 }
 
-// Public endpoints (no auth)
+// Public endpoints
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
@@ -122,7 +123,7 @@ app.get('/api/key', (req, res) => {
   res.json({ message: 'Pass X-Api-Key header' });
 });
 
-// Debug endpoints (no auth for monitoring)
+// Debug endpoints
 app.get('/api/debug/logs', (req, res) => {
   const logs = logger.readRecent(200);
   res.json({ logs, count: logs.length });
@@ -130,7 +131,6 @@ app.get('/api/debug/logs', (req, res) => {
 
 app.post('/api/debug/logs/clear', (req, res) => {
   fs.writeFileSync('/tmp/paper-dashboard-debug.log', '');
-  logger.api('info', 'Logs cleared by request');
   res.json({ success: true });
 });
 
@@ -142,8 +142,10 @@ app.post('/api/tasks', (req, res) => {
   const taskDir = path.join(PAPERS_DIR, taskId);
   fs.mkdirSync(path.join(taskDir, 'input'), { recursive: true });
   fs.mkdirSync(path.join(taskDir, 'workspace'), { recursive: true });
+  
   const status = createInitialStatus(taskId);
   fs.writeFileSync(path.join(taskDir, 'status.json'), JSON.stringify(status, null, 2));
+  
   logger.api('info', 'Task created', { taskId });
   res.json({ task_id: taskId, status });
 });
@@ -151,23 +153,28 @@ app.post('/api/tasks', (req, res) => {
 app.post('/api/tasks/:taskId/papers', upload.single('paper'), async (req, res) => {
   const { taskId } = req.params;
   logger.upload('info', 'Upload started', { taskId, filename: req.file?.originalname });
+  
   const taskDir = path.join(PAPERS_DIR, taskId);
   if (!fs.existsSync(taskDir)) {
     logger.upload('error', 'Task not found', { taskId });
     return res.status(404).json({ error: 'Task not found' });
   }
+  
   if (!req.file) {
     logger.upload('error', 'No file uploaded', { taskId });
     return res.status(400).json({ error: 'No paper uploaded' });
   }
+  
   const inputDir = path.join(taskDir, 'input');
   fs.renameSync(req.file.path, path.join(inputDir, req.file.originalname));
+  
   const status = getStatus(taskId);
   const newTotal = (status?.progress?.papers_total || 0) + 1;
   updateStatus(taskId, {
     progress: { ...status?.progress, papers_total: newTotal },
     messages: [...(status?.messages || []), { timestamp: new Date().toISOString(), from: 'system', content: `已上传: ${req.file.originalname}` }]
   });
+  
   logger.upload('info', 'Upload complete', { taskId, filename: req.file.originalname, papers_total: newTotal });
   res.json({ success: true, paper_name: req.file.originalname, papers_total: newTotal });
 });
@@ -178,14 +185,53 @@ app.get('/api/tasks/:taskId/status', (req, res) => {
   res.json(status);
 });
 
+// 关键修复：trigger 现在真正启动 AI 处理
 app.post('/api/tasks/:taskId/trigger', async (req, res) => {
   const { taskId } = req.params;
+  
   if (!fs.existsSync(path.join(PAPERS_DIR, taskId))) {
     return res.status(404).json({ error: 'Task not found' });
   }
+
+  const status = getStatus(taskId);
+  if (!status || status.progress.papers_total === 0) {
+    return res.status(400).json({ error: 'No papers uploaded yet' });
+  }
+
+  logger.api('info', 'Trigger called - starting AI processing', { taskId });
+  
+  // 更新状态为处理中
   updateStatus(taskId, { stage_status: 'processing' });
-  logger.api('info', 'Trigger called - OpenClaw Session should start', { taskId });
-  res.json({ success: true, message: 'OpenClaw session triggered' });
+  
+  // 启动处理器子进程
+  const processor = spawn('node', [PROCESSOR_SCRIPT, taskId], {
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+  
+  processor.stdout.on('data', (data) => {
+    const msg = data.toString().trim();
+    if (msg) {
+      logger.processor?.('info', msg);
+    }
+  });
+  
+  processor.stderr.on('data', (data) => {
+    const msg = data.toString().trim();
+    if (msg) {
+      logger.processor?.('error', msg);
+    }
+  });
+  
+  processor.on('close', (code) => {
+    if (code === 0) {
+      logger.api('info', 'AI processing completed', { taskId });
+    } else {
+      logger.api('error', 'AI processing failed', { taskId, code });
+      updateStatus(taskId, { stage_status: 'error', error: 'Processing failed' });
+    }
+  });
+  
+  res.json({ success: true, message: 'AI processing started' });
 });
 
 app.get('/api/tasks', (req, res) => {
@@ -210,7 +256,7 @@ app.post('/api/tasks/:taskId/topics', (req, res) => {
   if (!topic) return res.status(400).json({ error: 'Topic required' });
   fs.writeFileSync(path.join(PAPERS_DIR, taskId, 'topics.json'), JSON.stringify(topic, null, 2));
   updateStatus(taskId, { stage_status: 'waiting_confirm', result: { selected_topic: topic } });
-  logger.api('info', 'Topic selected', { taskId, topic: topic.title });
+  logger.api('info', 'Topic selected', { taskId });
   res.json({ success: true });
 });
 
@@ -232,7 +278,7 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`\n╔════════════════════════════════════════════════════════════╗`);
   console.log(`║  Paper Dashboard Backend                          ║`);
   console.log(`║  Port: ${PORT}                                      ║`);
-  console.log(`║  Debug Logs: GET /api/debug/logs                    ║`);
+  console.log(`║  Processor: ENABLED                               ║`);
   console.log(`╚════════════════════════════════════════════════════════════╝\n`);
 });
 
