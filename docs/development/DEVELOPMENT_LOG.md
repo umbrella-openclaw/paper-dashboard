@@ -219,3 +219,42 @@ curl -H "X-Api-Key: <key>" http://localhost:8080/api/tasks
 ```
 
 现在我可以完全监控 Dashboard 的后台活动了！
+
+---
+
+## 2026-03-21 21:35
+
+### 问题修复
+
+#### 根因分析
+1. **401 错误**：上传请求缺少 `X-Api-Key` header
+2. **刷新丢失**：`loadExistingTask` 没有正确等待 API 连接
+3. **Key 不一致**：`'paper-dashboard-task-id'` vs `'paper-dashboard-workflow-task-id'`
+
+#### 修复内容
+
+```typescript
+// 1. loadExistingTask 等待 API 连接
+private async loadExistingTask() {
+  let retries = 0;
+  while (!this.apiConnected && retries < 50) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    retries++;
+  }
+  // ... then load task
+}
+
+// 2. uploadPapers 强制检查 API 状态
+async uploadPapers(files: File[]) {
+  if (!this.apiConnected) {
+    this.errorMessage = '后端未连接，请刷新页面重试';
+    return;
+  }
+  // ... then create task and upload
+}
+```
+
+#### 日志验证
+```
+[21:34:01] [API] Upload complete {taskId: "...", papers_total: 1}
+```
