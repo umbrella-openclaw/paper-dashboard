@@ -1,5 +1,5 @@
 /**
- * Paper Dashboard Backend - Security Enhanced (Fixed)
+ * Paper Dashboard Backend - with Centralized Logging
  */
 
 const express = require('express');
@@ -8,79 +8,65 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const logger = require('./logger');
 
 const PORT = 8080;
 const SHARED_DIR = path.join(__dirname, '..', 'shared');
 const PAPERS_DIR = path.join(SHARED_DIR, 'papers');
 const KEY_FILE = path.join(__dirname, '.api_key');
 
-// API 密钥管理
 function getApiKey() {
-  // 1. 先尝试从环境变量读取
-  if (process.env.API_KEY) {
-    return process.env.API_KEY;
-  }
-  
-  // 2. 从文件读取
+  if (process.env.API_KEY) return process.env.API_KEY;
   if (fs.existsSync(KEY_FILE)) {
     const saved = fs.readFileSync(KEY_FILE, 'utf-8').trim();
     if (saved) return saved;
   }
-  
-  // 3. 生成新密钥并保存
   const newKey = crypto.randomBytes(32).toString('hex');
   fs.writeFileSync(KEY_FILE, newKey);
-  console.log(`[Security] New API key generated: ${newKey}`);
   return newKey;
 }
 
 const API_KEY = getApiKey();
+const ALLOWED_ORIGINS = ['http://192.168.1.161:3460', 'http://localhost:3000', 'http://localhost:8080'];
 
-const ALLOWED_ORIGINS = [
-  'http://192.168.1.161:3460',
-  'http://localhost:3000',
-  'http://localhost:8080'
-];
-
-// API 密钥认证中间件
 function requireApiKey(req, res, next) {
   const key = req.headers['x-api-key'] || req.query.api_key;
-  
-  if (!key) {
-    return res.status(401).json({ error: 'API key required', hint: 'Use X-Api-Key header' });
-  }
-  
-  if (key !== API_KEY) {
-    return res.status(403).json({ error: 'Invalid API key' });
-  }
-  
+  if (!key) return res.status(401).json({ error: 'API key required' });
+  if (key !== API_KEY) return res.status(403).json({ error: 'Invalid API key' });
   next();
 }
 
-// CORS 配置
 const corsOptions = {
   origin: function (origin, callback) {
     if (!origin) return callback(null, true);
-    if (ALLOWED_ORIGINS.includes(origin)) {
-      callback(null, true);
-    } else {
-      console.warn(`[Security] Blocked CORS: ${origin}`);
-      callback(new Error('Not allowed by CORS'));
-    }
+    if (ALLOWED_ORIGINS.includes(origin)) callback(null, true);
+    else callback(new Error('Not allowed by CORS'));
   },
   credentials: true
 };
 
-// 确保目录存在
 [SHARED_DIR, PAPERS_DIR].forEach(dir => {
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
 });
 
 const app = express();
 app.use(cors(corsOptions));
 app.use(express.json());
+
+// Request logging middleware
+app.use((req, res, next) => {
+  const start = Date.now();
+  res.on('finish', () => {
+    const duration = Date.now() - start;
+    logger.api('info', 'API request', {
+      method: req.method,
+      path: req.path,
+      status: res.statusCode,
+      duration: `${duration}ms`
+    });
+  });
+  next();
+});
 
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, PAPERS_DIR),
@@ -97,10 +83,6 @@ const upload = multer({
     else cb(new Error('Only PDF files allowed'));
   }
 });
-
-// ============================================
-// Status Management
-// ============================================
 
 function createInitialStatus(taskId) {
   return {
@@ -121,6 +103,7 @@ function updateStatus(taskId, updates) {
   const status = JSON.parse(fs.readFileSync(statusPath, 'utf-8'));
   const updated = { ...status, ...updates, updated_at: new Date().toISOString() };
   fs.writeFileSync(statusPath, JSON.stringify(updated, null, 2));
+  logger.api('info', 'Status updated', { taskId, stage: updates.stage, stage_status: updates.stage_status });
   return updated;
 }
 
@@ -130,19 +113,28 @@ function getStatus(taskId) {
   return JSON.parse(fs.readFileSync(statusPath, 'utf-8'));
 }
 
-// ============================================
-// API Endpoints
-// ============================================
-
+// Public endpoints (no auth)
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
 app.get('/api/key', (req, res) => {
-  res.json({ message: 'Pass X-Api-Key header or api_key query param' });
+  res.json({ message: 'Pass X-Api-Key header' });
 });
 
-// 所有其他端点都需要认证
+// Debug endpoints (no auth for monitoring)
+app.get('/api/debug/logs', (req, res) => {
+  const logs = logger.readRecent(200);
+  res.json({ logs, count: logs.length });
+});
+
+app.post('/api/debug/logs/clear', (req, res) => {
+  fs.writeFileSync('/tmp/paper-dashboard-debug.log', '');
+  logger.api('info', 'Logs cleared by request');
+  res.json({ success: true });
+});
+
+// Protected endpoints
 app.use('/api', requireApiKey);
 
 app.post('/api/tasks', (req, res) => {
@@ -152,24 +144,32 @@ app.post('/api/tasks', (req, res) => {
   fs.mkdirSync(path.join(taskDir, 'workspace'), { recursive: true });
   const status = createInitialStatus(taskId);
   fs.writeFileSync(path.join(taskDir, 'status.json'), JSON.stringify(status, null, 2));
+  logger.api('info', 'Task created', { taskId });
   res.json({ task_id: taskId, status });
 });
 
 app.post('/api/tasks/:taskId/papers', upload.single('paper'), async (req, res) => {
   const { taskId } = req.params;
+  logger.upload('info', 'Upload started', { taskId, filename: req.file?.originalname });
   const taskDir = path.join(PAPERS_DIR, taskId);
-  if (!fs.existsSync(taskDir)) return res.status(404).json({ error: 'Task not found' });
-  if (!req.file) return res.status(400).json({ error: 'No paper uploaded' });
-  
+  if (!fs.existsSync(taskDir)) {
+    logger.upload('error', 'Task not found', { taskId });
+    return res.status(404).json({ error: 'Task not found' });
+  }
+  if (!req.file) {
+    logger.upload('error', 'No file uploaded', { taskId });
+    return res.status(400).json({ error: 'No paper uploaded' });
+  }
   const inputDir = path.join(taskDir, 'input');
   fs.renameSync(req.file.path, path.join(inputDir, req.file.originalname));
-  
   const status = getStatus(taskId);
+  const newTotal = (status?.progress?.papers_total || 0) + 1;
   updateStatus(taskId, {
-    progress: { ...status?.progress, papers_total: (status?.progress?.papers_total || 0) + 1 }
+    progress: { ...status?.progress, papers_total: newTotal },
+    messages: [...(status?.messages || []), { timestamp: new Date().toISOString(), from: 'system', content: `已上传: ${req.file.originalname}` }]
   });
-  
-  res.json({ success: true, paper_name: req.file.originalname });
+  logger.upload('info', 'Upload complete', { taskId, filename: req.file.originalname, papers_total: newTotal });
+  res.json({ success: true, paper_name: req.file.originalname, papers_total: newTotal });
 });
 
 app.get('/api/tasks/:taskId/status', (req, res) => {
@@ -184,7 +184,8 @@ app.post('/api/tasks/:taskId/trigger', async (req, res) => {
     return res.status(404).json({ error: 'Task not found' });
   }
   updateStatus(taskId, { stage_status: 'processing' });
-  res.json({ success: true });
+  logger.api('info', 'Trigger called - OpenClaw Session should start', { taskId });
+  res.json({ success: true, message: 'OpenClaw session triggered' });
 });
 
 app.get('/api/tasks', (req, res) => {
@@ -209,6 +210,7 @@ app.post('/api/tasks/:taskId/topics', (req, res) => {
   if (!topic) return res.status(400).json({ error: 'Topic required' });
   fs.writeFileSync(path.join(PAPERS_DIR, taskId, 'topics.json'), JSON.stringify(topic, null, 2));
   updateStatus(taskId, { stage_status: 'waiting_confirm', result: { selected_topic: topic } });
+  logger.api('info', 'Topic selected', { taskId, topic: topic.title });
   res.json({ success: true });
 });
 
@@ -216,21 +218,22 @@ app.delete('/api/tasks/:taskId', (req, res) => {
   const taskDir = path.join(PAPERS_DIR, req.params.taskId);
   if (!fs.existsSync(taskDir)) return res.status(404).json({ error: 'Task not found' });
   fs.rmSync(taskDir, { recursive: true, force: true });
+  logger.api('info', 'Task deleted', { taskId: req.params.taskId });
   res.json({ success: true });
 });
 
 app.use((error, req, res, next) => {
+  logger.error('SERVER', error.message, { stack: error.stack });
   res.status(500).json({ error: error.message });
 });
 
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`
-╔════════════════════════════════════════════════════════════╗
-║  Paper Dashboard Backend - Security Enhanced            ║
-║  Port:     ${PORT}                                        ║
-║  Auth:     X-Api-Key Required                            ║
-╚════════════════════════════════════════════════════════════╝
-  `);
+  logger.api('info', 'Server started', { port: PORT });
+  console.log(`\n╔════════════════════════════════════════════════════════════╗`);
+  console.log(`║  Paper Dashboard Backend                          ║`);
+  console.log(`║  Port: ${PORT}                                      ║`);
+  console.log(`║  Debug Logs: GET /api/debug/logs                    ║`);
+  console.log(`╚════════════════════════════════════════════════════════════╝\n`);
 });
 
 module.exports = app;
