@@ -526,6 +526,91 @@ export class ConfigStage extends LitElement {
     .message-from.user { color: #4338ca; }
     .message-content { color: var(--color-text-primary); margin-top: 2px; }
 
+    .paper-preview {
+      background: var(--color-bg);
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-lg);
+      padding: var(--space-3);
+      margin-top: var(--space-3);
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .paper-preview h4 {
+      font-size: var(--text-sm);
+      font-weight: 700;
+      color: var(--color-text-primary);
+      margin-bottom: var(--space-3);
+      padding-bottom: var(--space-2);
+      border-bottom: 1px solid var(--color-border-light);
+    }
+
+    .preview-section {
+      margin-bottom: var(--space-3);
+    }
+
+    .preview-label {
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: var(--color-text-tertiary);
+      margin-bottom: 2px;
+    }
+
+    .preview-value {
+      font-size: var(--text-sm);
+      color: var(--color-text-primary);
+      line-height: 1.5;
+    }
+
+    .preview-value.title {
+      font-weight: 700;
+      font-size: var(--text-base);
+    }
+
+    .preview-value.abstract {
+      max-height: 150px;
+      overflow-y: auto;
+      background: var(--color-surface);
+      padding: var(--space-2);
+      border-radius: var(--radius-md);
+      text-align: justify;
+    }
+
+    .preview-value .keyword-tag {
+      display: inline-block;
+      background: var(--color-accent-light);
+      color: var(--color-accent);
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: var(--text-xs);
+      margin: 2px 4px 2px 0;
+      font-weight: 600;
+    }
+
+    .analysis-records {
+      background: var(--color-surface);
+      padding: var(--space-2);
+      border-radius: var(--radius-md);
+    }
+
+    .record-item {
+      font-size: var(--text-xs);
+      padding: 4px 0;
+      border-bottom: 1px solid var(--color-border-light);
+    }
+
+    .record-item:last-child {
+      border-bottom: none;
+    }
+
+    .record-item.info {
+      color: var(--color-accent);
+    }
+
+    .record-item.error {
+      color: #ef4444;
+    }
+
     @media (max-width: 1280px) {
       .layout { grid-template-columns: 1fr; }
       .panel { min-height: auto; }
@@ -533,6 +618,7 @@ export class ConfigStage extends LitElement {
   `;
 
   @state() private taskId: string | null = null;
+  @state() private paperMetadata: any = null;
   @state() private taskStatus: TaskStatus | null = null;
   @state() private topics: TopicCandidate[] = [];
   @state() private selectedTopicId: number | null = null;
@@ -609,6 +695,7 @@ export class ConfigStage extends LitElement {
           // Load topics if already analyzed
           if (status.stage_status === 'waiting_confirm') {
             await this.loadTopics();
+        await this.loadPaperMetadata();
           }
           this.startPolling(); // Start polling to monitor status changes
           this.debug('log', 'loadExistingTask_restored', { taskId: savedTaskId, status });
@@ -718,6 +805,7 @@ export class ConfigStage extends LitElement {
         // Check if topics are available
         if (this.taskStatus?.stage_status === 'waiting_confirm') {
           await this.loadTopics();
+        await this.loadPaperMetadata();
         }
 
         // Notify ready state
@@ -747,6 +835,23 @@ export class ConfigStage extends LitElement {
       }
     } catch (e) {
       console.error('Failed to load topics:', e);
+    }
+  }
+
+  private async loadPaperMetadata() {
+    if (!this.taskId) return;
+
+    try {
+      const response = await apiFetch(`${API_BASE}/api/tasks/${this.taskId}/metadata`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.papers && data.papers.length > 0) {
+          // Use the first paper's metadata
+          this.paperMetadata = data.papers[0].metadata;
+        }
+      }
+    } catch (e) {
+      console.error('Failed to load paper metadata:', e);
     }
   }
 
@@ -1020,6 +1125,46 @@ export class ConfigStage extends LitElement {
               </div>
             `}
           </div>
+
+          ${this.paperMetadata ? html`
+            <div class="paper-preview">
+              <h4>📄 论文预览</h4>
+              <div class="preview-section">
+                <div class="preview-label">标题</div>
+                <div class="preview-value title">${this.paperMetadata.title || '未知'}</div>
+              </div>
+              ${this.paperMetadata.authors ? html`
+                <div class="preview-section">
+                  <div class="preview-label">作者</div>
+                  <div class="preview-value">${this.paperMetadata.authors}</div>
+                </div>
+              ` : ''}
+              ${this.paperMetadata.abstract ? html`
+                <div class="preview-section">
+                  <div class="preview-label">摘要</div>
+                  <div class="preview-value abstract">${this.paperMetadata.abstract}</div>
+                </div>
+              ` : ''}
+              ${this.paperMetadata.keywords?.length ? html`
+                <div class="preview-section">
+                  <div class="preview-label">关键词</div>
+                  <div class="preview-value">
+                    ${this.paperMetadata.keywords.map((k: string) => html`<span class="keyword-tag">${k}</span>`)}
+                  </div>
+                </div>
+              ` : ''}
+              ${this.paperMetadata.analysisRecords?.length ? html`
+                <div class="preview-section">
+                  <div class="preview-label">分析记录</div>
+                  <div class="preview-value analysis-records">
+                    ${this.paperMetadata.analysisRecords.map((r: any) => html`
+                      <div class="record-item ${r.type}">${r.content}</div>
+                    `)}
+                  </div>
+                </div>
+              ` : ''}
+            </div>
+          ` : ''}
 
           <button @click=${() => this.shadowRoot?.querySelector<HTMLInputElement>('label.dropzone input')?.click()}>
             + 继续添加论文

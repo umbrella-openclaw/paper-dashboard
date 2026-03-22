@@ -306,6 +306,21 @@ app.post('/api/tasks/:taskId/topics', (req, res) => {
   res.json({ success: true });
 });
 
+// Metadata endpoint - get parsed paper metadata
+app.get('/api/tasks/:taskId/metadata', (req, res) => {
+  const { taskId } = req.params;
+  const metadataPath = path.join(PAPERS_DIR, taskId, 'metadata.json');
+  if (!fs.existsSync(metadataPath)) {
+    return res.json({ papers: [] });
+  }
+  try {
+    const data = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
+    res.json(data);
+  } catch (e) {
+    res.status(500).json({ error: 'Failed to parse metadata' });
+  }
+});
+
 app.post('/api/tasks/:taskId/messages', (req, res) => {
   const { taskId } = req.params;
   const { action, data } = req.body;
