@@ -7,7 +7,7 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 
-const WS_RELAY_URL = 'ws://192.168.1.161:8081';
+const WS_RELAY_URL = 'ws://localhost:8081';
 
 interface Session {
   key: string;
