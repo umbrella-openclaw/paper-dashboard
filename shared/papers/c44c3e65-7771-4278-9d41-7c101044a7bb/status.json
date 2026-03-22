@@ -3,13 +3,13 @@
   "stage": "INTAKE",
   "stage_status": "waiting_confirm",
   "progress": {
-    "papers_processed": 1,
-    "papers_total": 1,
-    "topics_generated": 3
+    "papers_processed": 2,
+    "papers_total": 2,
+    "topics_generated": 5
   },
   "result": {
-    "papers_count": 1,
-    "topics_count": 3
+    "papers_count": 2,
+    "topics_count": 5
   },
   "messages": [
     {
@@ -26,9 +26,24 @@
       "timestamp": "2026-03-22T07:42:10.984Z",
       "from": "system",
       "content": "已解析: R E S E A R C H A R T I C L E ..."
+    },
+    {
+      "timestamp": "2026-03-22T07:50:41.735Z",
+      "from": "system",
+      "content": "已上传: PhysRevE.93.031101.pdf"
+    },
+    {
+      "timestamp": "2026-03-22T07:50:42.822Z",
+      "from": "system",
+      "content": "已解析: R E S E A R C H A R T I C L E ..."
+    },
+    {
+      "timestamp": "2026-03-22T07:50:42.890Z",
+      "from": "system",
+      "content": "已解析: RAPID COMMUNICATIONS PHYSICAL ..."
     }
   ],
   "title": "未指定标题论文",
   "error": null,
-  "updated_at": "2026-03-22T07:42:10.985Z"
+  "updated_at": "2026-03-22T07:50:42.891Z"
 }

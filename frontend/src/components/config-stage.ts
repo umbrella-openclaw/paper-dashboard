@@ -59,13 +59,14 @@ interface SelectedTopic {
 @customElement('config-stage')
 export class ConfigStage extends LitElement {
   static styles = css`
+  static styles = css`
     :host {
       display: block;
     }
 
     .layout {
       display: grid;
-      grid-template-columns: 1fr 1.2fr 1fr;
+      grid-template-columns: repeat(3, 1fr);
       gap: var(--space-4);
       align-items: start;
     }
@@ -76,11 +77,6 @@ export class ConfigStage extends LitElement {
       border-radius: var(--radius-xl);
       padding: var(--space-4);
       box-shadow: var(--shadow-sm);
-      display: grid;
-      gap: var(--space-4);
-      min-height: 520px;
-      max-height: 80vh;
-      overflow-y: auto;
     }
 
     .panel h3 {
@@ -90,9 +86,10 @@ export class ConfigStage extends LitElement {
       display: flex;
       align-items: center;
       gap: var(--space-2);
+      margin-bottom: var(--space-3);
     }
 
-    .panel h3 .step {
+    .step {
       background: var(--color-accent);
       color: white;
       width: 24px;
@@ -102,44 +99,115 @@ export class ConfigStage extends LitElement {
       align-items: center;
       justify-content: center;
       font-size: var(--text-xs);
+      flex-shrink: 0;
     }
 
-    .panel p {
+    .api-status {
+      font-size: var(--text-xs);
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-weight: 600;
+      margin-left: auto;
+    }
+
+    .api-status.connected {
+      background: #d1fae5;
+      color: #047857;
+    }
+
+    .api-status.disconnected {
+      background: #fee2e2;
+      color: #b91c1c;
+    }
+
+    .dropzone {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-6);
+      border: 2px dashed var(--color-border);
+      border-radius: var(--radius-xl);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+      background: var(--color-bg);
+    }
+
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--color-accent);
+      background: var(--color-accent-light);
+    }
+
+    .dropzone input {
+      display: none;
+    }
+
+    .dropzone p {
       font-size: var(--text-sm);
       color: var(--color-text-secondary);
+      margin: 0;
     }
 
-    .upload-panel {
-      background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-bg) 100%);
+    .subtle {
+      font-size: var(--text-xs) !important;
+      color: var(--color-text-tertiary) !important;
+      margin-top: var(--space-1) !important;
     }
 
-    .preview-panel {
-      background: var(--color-surface);
-    }
-
-    .topics-panel {
-      background: linear-gradient(135deg, var(--color-bg) 0%, var(--color-surface) 100%);
-    }
-
-    .paper-selector {
-      margin-bottom: var(--space-4);
-      padding-bottom: var(--space-3);
-      border-bottom: 1px solid var(--color-border-light);
-    }
-
-    .selector-label {
+    .error-msg {
+      background: #fee2e2;
+      color: #991b1b;
+      padding: var(--space-2);
+      border-radius: var(--radius-md);
       font-size: var(--text-xs);
-      font-weight: 600;
+      margin: var(--space-2) 0;
+    }
+
+    .panel-upload button,
+    .panel-library button,
+    .panel-topics button,
+    .panel-detail button {
+      margin-top: var(--space-3);
+      width: 100%;
+      padding: var(--space-2);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      background: var(--color-surface);
+      color: var(--color-text-primary);
+      font-size: var(--text-sm);
+      cursor: pointer;
+    }
+
+    .panel-upload button:hover,
+    .panel-library button:hover,
+    .panel-topics button:hover,
+    .panel-detail button:hover {
+      border-color: var(--color-accent);
+      color: var(--color-accent);
+    }
+
+    /* Panel Library */
+    .panel-library {
+      min-height: 200px;
+    }
+
+    .empty-state {
+      text-align: center;
+      padding: var(--space-4);
       color: var(--color-text-tertiary);
-      margin-bottom: var(--space-2);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
+    }
+
+    .hint {
+      font-size: var(--text-xs);
+      color: var(--color-text-tertiary);
+      margin-top: var(--space-1);
     }
 
     .paper-tabs {
       display: flex;
       flex-wrap: wrap;
       gap: var(--space-2);
+      margin-bottom: var(--space-3);
     }
 
     .paper-tab {
@@ -150,12 +218,6 @@ export class ConfigStage extends LitElement {
       color: var(--color-text-secondary);
       font-size: var(--text-xs);
       cursor: pointer;
-      transition: all var(--transition-fast);
-    }
-
-    .paper-tab:hover {
-      border-color: var(--color-accent);
-      color: var(--color-accent);
     }
 
     .paper-tab.active {
@@ -164,15 +226,13 @@ export class ConfigStage extends LitElement {
       color: white;
     }
 
-    .paper-preview-mini {
+    .paper-preview {
       background: var(--color-bg);
-      border: 1px solid var(--color-border-light);
       border-radius: var(--radius-lg);
       padding: var(--space-3);
-      margin-bottom: var(--space-4);
     }
 
-    .preview-header {
+    .preview-title {
       font-size: var(--text-sm);
       font-weight: 700;
       color: var(--color-text-primary);
@@ -182,182 +242,152 @@ export class ConfigStage extends LitElement {
     .preview-authors {
       font-size: var(--text-xs);
       color: var(--color-text-secondary);
+      margin-bottom: var(--space-1);
+    }
+
+    .preview-meta {
+      font-size: var(--text-xs);
+      color: var(--color-text-tertiary);
       margin-bottom: var(--space-2);
     }
 
     .preview-abstract {
       font-size: var(--text-xs);
-      color: var(--color-text-tertiary);
+      color: var(--color-text-secondary);
       line-height: 1.5;
       max-height: 80px;
       overflow: hidden;
       text-overflow: ellipsis;
+      margin-bottom: var(--space-2);
     }
 
     .preview-keywords {
       display: flex;
       flex-wrap: wrap;
       gap: var(--space-1);
-      margin-top: var(--space-2);
+      margin-bottom: var(--space-2);
     }
 
     .kw {
       background: var(--color-accent-light);
       color: var(--color-accent);
-      padding: 2px 6px;
+      padding: 2px 8px;
       border-radius: 999px;
       font-size: 10px;
       font-weight: 600;
     }
 
-    .empty-papers {
-      text-align: center;
-      padding: var(--space-4);
-      color: var(--color-text-tertiary);
-      font-size: var(--text-sm);
-    }
-
-    .empty-papers-hint {
-      text-align: center;
-      padding: var(--space-3);
-      background: var(--color-bg);
-      border-radius: var(--radius-lg);
-      color: var(--color-text-tertiary);
-      font-size: var(--text-sm);
-      margin: var(--space-3) 0;
-    }
-
-    .paper-tabs-header {
-      margin-bottom: var(--space-3);
-      padding-bottom: var(--space-3);
-      border-bottom: 1px solid var(--color-border-light);
-    }
-
-    .tabs-label {
-      font-size: var(--text-xs);
-      font-weight: 600;
-      color: var(--color-text-tertiary);
-      display: block;
-      margin-bottom: var(--space-2);
-    }
-
-    .paper-tabs-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--space-2);
-    }
-
-    .paper-tab-btn {
-      padding: var(--space-1) var(--space-3);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-md);
-      background: var(--color-bg);
-      color: var(--color-text-secondary);
-      font-size: var(--text-xs);
-      cursor: pointer;
-      transition: all var(--transition-fast);
-    }
-
-    .paper-tab-btn:hover {
-      border-color: var(--color-accent);
-      color: var(--color-accent);
-    }
-
-    .paper-tab-btn.active {
-      background: var(--color-accent);
-      border-color: var(--color-accent);
-      color: white;
-    }
-
-    .paper-detail-view {
-      background: var(--color-bg);
-      border-radius: var(--radius-lg);
-      padding: var(--space-3);
-    }
-
-    .paper-detail-title {
-      font-size: var(--text-base);
-      font-weight: 700;
-      color: var(--color-text-primary);
-      margin-bottom: var(--space-2);
-    }
-
-    .paper-detail-authors {
-      font-size: var(--text-sm);
-      color: var(--color-text-secondary);
-      margin-bottom: var(--space-1);
-    }
-
-    .paper-detail-meta {
-      font-size: var(--text-xs);
-      color: var(--color-text-tertiary);
-      margin-bottom: var(--space-3);
-    }
-
-    .paper-detail-section {
-      margin-top: var(--space-3);
-    }
-
-    .section-label {
-      font-size: var(--text-xs);
-      font-weight: 600;
-      color: var(--color-text-tertiary);
-      margin-bottom: var(--space-1);
-    }
-
-    .section-content.abstract {
-      font-size: var(--text-sm);
-      color: var(--color-text-secondary);
-      line-height: 1.6;
-      text-align: justify;
-      max-height: 120px;
-      overflow-y: auto;
-    }
-
-    .keywords-row {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--space-1);
-    }
-
-    .kw-badge {
-      background: var(--color-accent-light);
-      color: var(--color-accent);
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: var(--text-xs);
-      font-weight: 600;
-    }
-
-    .analysis-list {
+    .preview-records {
       background: var(--color-surface);
-      border-radius: var(--radius-md);
       padding: var(--space-2);
+      border-radius: var(--radius-md);
       font-size: var(--text-xs);
     }
 
-    .analysis-entry {
+    .record-item {
       padding: var(--space-1) 0;
       border-bottom: 1px solid var(--color-border-light);
       color: var(--color-text-secondary);
     }
 
-    .analysis-entry:last-child {
+    .record-item:last-child {
       border-bottom: none;
     }
 
-    .analysis-entry.info {
-      color: var(--color-accent);
-    }
-
-    .loading-view {
+    .loading-state {
       text-align: center;
       padding: var(--space-4);
       color: var(--color-text-tertiary);
-      font-size: var(--text-sm);
     }
 
-    .message-log-panel {
+    /* Panel Topics */
+    .processing {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-4);
+    }
+
+    .spinner {
+      width: 24px;
+      height: 24px;
+      border: 2px solid var(--color-border);
+      border-top-color: var(--color-accent);
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .progress-bar {
+      width: 100%;
+      height: 6px;
+      background: var(--color-border);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .progress-fill {
+      height: 100%;
+      background: var(--color-accent);
+      transition: width 0.3s ease;
+    }
+
+    .topics-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--space-2);
+    }
+
+    .topic-card {
+      padding: var(--space-3);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-lg);
+      background: var(--color-surface);
+      cursor: pointer;
+    }
+
+    .topic-card:hover {
+      border-color: var(--color-accent);
+    }
+
+    .topic-card.selected {
+      border-color: var(--color-accent);
+      background: var(--color-accent-light);
+    }
+
+    .topic-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: var(--space-1);
+    }
+
+    .topic-title {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--color-text-primary);
+    }
+
+    .topic-score {
+      font-size: var(--text-xs);
+      font-weight: 700;
+      color: var(--color-accent);
+    }
+
+    .topic-summary {
+      font-size: var(--text-xs);
+      color: var(--color-text-secondary);
+    }
+
+    /* Panel Detail */
+    .panel-detail {
+      min-height: 300px;
+    }
+
+    .message-log-top {
       background: var(--color-bg);
       border: 1px solid var(--color-border-light);
       border-radius: var(--radius-lg);
@@ -374,16 +404,11 @@ export class ConfigStage extends LitElement {
       border-bottom: 1px solid var(--color-border-light);
     }
 
-    .log-entries {
-      display: flex;
-      flex-direction: column;
-      gap: var(--space-2);
-    }
-
     .log-entry {
       display: flex;
       gap: var(--space-2);
       font-size: var(--text-xs);
+      padding: var(--space-1) 0;
     }
 
     .log-time {
@@ -395,901 +420,78 @@ export class ConfigStage extends LitElement {
       color: var(--color-text-secondary);
     }
 
-    .topic-panel {
+    .topic-detail {
       display: flex;
       flex-direction: column;
-      height: 100%;
-    }
-
-    .paper-reference-viewer {
-      background: var(--color-bg);
-      border: 1px solid var(--color-border-light);
-      border-radius: var(--radius-lg);
-      margin-bottom: var(--space-4);
-      overflow: hidden;
-    }
-
-    .viewer-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: var(--space-3);
-      background: var(--color-surface);
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .viewer-header:hover {
-      background: var(--color-bg);
-    }
-
-    .viewer-title {
-      font-size: var(--text-sm);
-      font-weight: 600;
-      color: var(--color-text-primary);
-    }
-
-    .viewer-toggle {
-      font-size: var(--text-xs);
-      color: var(--color-text-tertiary);
-    }
-
-    .viewer-content {
-      padding: var(--space-3);
-      max-height: 400px;
-      overflow-y: auto;
-    }
-
-    .paper-tabs-compact {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--space-2);
-      margin-bottom: var(--space-3);
-      padding-bottom: var(--space-3);
-      border-bottom: 1px solid var(--color-border-light);
-    }
-
-    .paper-tab-compact {
-      padding: var(--space-1) var(--space-2);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-md);
-      background: var(--color-surface);
-      color: var(--color-text-secondary);
-      font-size: var(--text-xs);
-      cursor: pointer;
-    }
-
-    .paper-tab-compact.active {
-      background: var(--color-accent);
-      border-color: var(--color-accent);
-      color: white;
-    }
-
-    .current-paper-preview {
-      background: var(--color-surface);
-      border-radius: var(--radius-md);
-      padding: var(--space-3);
-    }
-
-    .paper-title-preview {
-      font-size: var(--text-sm);
-      font-weight: 700;
-      color: var(--color-text-primary);
-      margin-bottom: var(--space-2);
-    }
-
-    .paper-authors-preview {
-      font-size: var(--text-xs);
-      color: var(--color-text-secondary);
-      margin-bottom: var(--space-1);
-    }
-
-    .paper-meta-preview {
-      font-size: var(--text-xs);
-      color: var(--color-text-tertiary);
-      margin-bottom: var(--space-2);
-    }
-
-    .paper-abstract-preview {
-      font-size: var(--text-xs);
-      color: var(--color-text-secondary);
-      line-height: 1.6;
-      margin-bottom: var(--space-2);
-      text-align: justify;
-    }
-
-    .paper-keywords-preview {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--space-1);
-      margin-bottom: var(--space-2);
-    }
-
-    .kw-tag {
-      background: var(--color-accent-light);
-      color: var(--color-accent);
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: 10px;
-      font-weight: 600;
-    }
-
-    .paper-analysis-preview {
-      background: var(--color-bg);
-      padding: var(--space-2);
-      border-radius: var(--radius-md);
-      font-size: var(--text-xs);
-    }
-
-    .paper-analysis-preview strong {
-      color: var(--color-text-tertiary);
-    }
-
-    .analysis-item {
-      padding: var(--space-1) 0;
-      color: var(--color-text-secondary);
-      border-bottom: 1px solid var(--color-border-light);
-    }
-
-    .analysis-item:last-child {
-      border-bottom: none;
-    }
-
-    .analysis-item.info {
-      color: var(--color-accent);
-    }
-
-    .loading-paper {
-      text-align: center;
-      padding: var(--space-4);
-      color: var(--color-text-tertiary);
-      font-size: var(--text-sm);
-    }
-
-    .upload-status {
-      display: flex;
-      align-items: center;
-      gap: var(--space-2);
-      padding: var(--space-2) var(--space-3);
-      background: var(--color-bg);
-      border-radius: var(--radius-md);
-      font-size: var(--text-sm);
-      color: var(--color-text-secondary);
-    }
-
-    .status-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: var(--color-border);
-    }
-
-    .status-dot.done {
-      background: #10b981;
-    }
-
-    .status-dot.processing {
-      background: #f59e0b;
-      animation: pulse 1s infinite;
-    }
-
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.5; }
-    }
-
-    .processing-text {
-      color: #f59e0b;
-      font-weight: 600;
-    }
-
-    .paper-tabs {
-      margin-bottom: var(--space-3);
-    }
-
-    .tabs-list {
-      display: flex;
-      gap: var(--space-2);
-      flex-wrap: wrap;
-    }
-
-    .tab-btn {
-      padding: var(--space-1) var(--space-3);
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-md);
-      background: var(--color-bg);
-      color: var(--color-text-secondary);
-      font-size: var(--text-xs);
-      font-weight: 600;
-      cursor: pointer;
-      transition: all var(--transition-fast);
-    }
-
-    .tab-btn:hover {
-      border-color: var(--color-accent);
-      color: var(--color-accent);
-    }
-
-    .tab-btn.active {
-      background: var(--color-accent);
-      border-color: var(--color-accent);
-      color: white;
-    }
-
-    .empty-preview {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      padding: var(--space-8);
-      text-align: center;
-      color: var(--color-text-tertiary);
-    }
-
-    .empty-preview .empty-icon {
-      font-size: 48px;
-      margin-bottom: var(--space-3);
-      opacity: 0.5;
-    }
-
-    .empty-preview p {
-      font-size: var(--text-sm);
-      color: var(--color-text-tertiary);
-    }
-
-    .paper-preview {
-      display: grid;
       gap: var(--space-3);
     }
 
-    .preview-section {
-      display: grid;
-      gap: var(--space-1);
-    }
-
-    .preview-label {
-      font-size: var(--text-xs);
-      font-weight: 600;
-      color: var(--color-text-tertiary);
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-    }
-
-    .preview-value {
-      font-size: var(--text-sm);
-      color: var(--color-text-primary);
-      line-height: 1.6;
-    }
-
-    .preview-value.title {
-      font-size: var(--text-base);
-      font-weight: 700;
-      color: var(--color-text-primary);
-    }
-
-    .preview-value.abstract {
-      max-height: 150px;
-      overflow-y: auto;
-      background: var(--color-bg);
-      padding: var(--space-2);
-      border-radius: var(--radius-md);
-      text-align: justify;
-    }
-
-    .preview-value.keywords {
-      display: flex;
-      flex-wrap: wrap;
-      gap: var(--space-1);
-    }
-
-    .keyword-tag {
-      background: var(--color-accent-light);
-      color: var(--color-accent);
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: var(--text-xs);
-      font-weight: 600;
-    }
-
-    .analysis-records {
-      background: var(--color-bg);
-      padding: var(--space-2);
-      border-radius: var(--radius-md);
-      font-size: var(--text-xs);
-    }
-
-    .record-item {
-      padding: var(--space-1) 0;
-      border-bottom: 1px solid var(--color-border-light);
-      color: var(--color-text-secondary);
-    }
-
-    .record-item:last-child {
-      border-bottom: none;
-    }
-
-    .record-item.info {
-      color: var(--color-accent);
-    }
-
-    .record-item.error {
-      color: #ef4444;
-    }
-
-    .message-log {
-      margin-top: var(--space-4);
-      padding-top: var(--space-3);
-      border-top: 1px solid var(--color-border-light);
-    }
-
-    .message-log strong {
-      display: block;
-      font-size: var(--text-xs);
-      color: var(--color-text-tertiary);
-      margin-bottom: var(--space-2);
-    }
-
-    .message-item {
-      display: flex;
-      gap: var(--space-2);
-      font-size: var(--text-xs);
-      padding: var(--space-1) 0;
-    }
-
-    .message-time {
-      color: var(--color-text-tertiary);
-      flex-shrink: 0;
-    }
-
-    .message-content {
-      color: var(--color-text-secondary);
-    }
-
-    .dropzone {
-      border: 1.5px dashed var(--color-border);
-      border-radius: var(--radius-lg);
-      background: var(--color-bg);
-      padding: var(--space-6) var(--space-4);
-      text-align: center;
-      transition: all var(--transition-base);
-      cursor: pointer;
-    }
-
-    .dropzone:hover {
-      border-color: var(--color-accent);
-      background: #f0fdf4;
-    }
-
-    .dropzone.dragover {
-      border-color: var(--color-accent);
-      background: #d1fae5;
-      transform: scale(1.02);
-    }
-
-    .dropzone input { display: none; }
-
-    .subtle {
-      color: var(--color-text-tertiary);
-      font-size: var(--text-xs);
-    }
-
-    .paper-list {
-      display: grid;
-      gap: var(--space-2);
-      max-height: 280px;
-      overflow-y: auto;
-      border-top: 1px solid var(--color-border-light);
-      padding-top: var(--space-3);
-    }
-
-    .paper-item {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: var(--space-2);
-      border: 1px solid var(--color-border-light);
-      border-radius: var(--radius-md);
-      padding: var(--space-3);
-      background: var(--color-bg);
-    }
-
-    .paper-name {
-      font-size: var(--text-sm);
-      color: var(--color-text-primary);
-      font-weight: 600;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .paper-meta {
-      font-size: var(--text-xs);
-      color: var(--color-text-tertiary);
-      margin-top: 2px;
-    }
-
-    .paper-status {
+    .field {
       display: flex;
       flex-direction: column;
-      align-items: flex-end;
-      gap: 4px;
+      gap: var(--space-1);
     }
-
-    .status {
-      font-size: 10px;
-      border-radius: 999px;
-      font-weight: 700;
-      padding: 3px 8px;
-      text-align: center;
-    }
-
-    .status.uploaded { background: #f4f4f5; color: #52525b; }
-    .status.processing { background: #dbeafe; color: #1e40af; }
-    .status.analyzing { background: #fef3c7; color: #92400e; }
-    .status.done { background: #d1fae5; color: #065f46; }
-    .status.waiting { background: #e0e7ff; color: #4338ca; }
-    .status.error { background: #fee2e2; color: #991b1b; }
-
-    .metadata-preview {
-      background: var(--color-bg);
-      border: 1px solid var(--color-border-light);
-      border-radius: var(--radius-md);
-      padding: var(--space-3);
-      font-size: var(--text-xs);
-      margin-top: var(--space-2);
-    }
-
-    .metadata-preview .meta-title {
-      font-weight: 600;
-      color: var(--color-text-primary);
-      margin-bottom: 4px;
-    }
-
-    .keyword-tag {
-      background: #e0e7ff;
-      color: #4338ca;
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-size: 10px;
-      margin-right: 4px;
-      margin-bottom: 4px;
-      display: inline-block;
-    }
-
-    button {
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-md);
-      background: var(--color-surface);
-      color: var(--color-text-primary);
-      font-size: var(--text-sm);
-      font-weight: 600;
-      padding: var(--space-2) var(--space-3);
-      cursor: pointer;
-      transition: all var(--transition-fast);
-    }
-
-    button:hover:not(:disabled) {
-      border-color: var(--color-accent);
-      color: var(--color-accent);
-    }
-
-    button.primary {
-      background: var(--color-accent);
-      border-color: var(--color-accent);
-      color: #fff;
-    }
-
-    button.primary:hover:not(:disabled) {
-      background: var(--color-accent-hover);
-      border-color: var(--color-accent-hover);
-      color: #fff;
-    }
-
-    button.secondary {
-      background: #fef3c7;
-      border-color: #fde68a;
-      color: #92400e;
-    }
-
-    button.secondary:hover:not(:disabled) {
-      background: #fde68a;
-      border-color: #f59e0b;
-      color: #78350f;
-    }
-
-    button:disabled { cursor: not-allowed; opacity: 0.5; }
-
-    .processing {
-      border-radius: var(--radius-md);
-      border: 1px solid #fde68a;
-      background: #fffbeb;
-      color: #92400e;
-      padding: var(--space-4);
-      font-size: var(--text-sm);
-      display: grid;
-      gap: var(--space-2);
-      text-align: center;
-    }
-
-    .processing-spinner {
-      width: 32px;
-      height: 32px;
-      border: 3px solid #fde68a;
-      border-top-color: #f59e0b;
-      border-radius: 50%;
-      animation: spin 1s linear infinite;
-      margin: 0 auto;
-    }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .progress-track {
-      width: 100%;
-      height: 6px;
-      border-radius: 999px;
-      background: #fef3c7;
-      overflow: hidden;
-      margin-top: var(--space-2);
-    }
-
-    .progress-fill {
-      height: 100%;
-      background: #f59e0b;
-      transition: width var(--transition-base);
-    }
-
-    .topics-section { display: grid; gap: var(--space-3); }
-
-    .candidate {
-      border: 1px solid var(--color-border);
-      border-radius: var(--radius-lg);
-      padding: var(--space-3);
-      background: #fff;
-      cursor: pointer;
-      transition: all var(--transition-fast);
-    }
-
-    .candidate:hover {
-      border-color: var(--color-accent);
-      transform: translateY(-1px);
-      box-shadow: var(--shadow-sm);
-    }
-
-    .candidate.active {
-      border-color: var(--color-accent);
-      background: #f0fdf4;
-      box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
-    }
-
-    .candidate-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      gap: var(--space-2);
-      margin-bottom: var(--space-2);
-    }
-
-    .candidate-title {
-      font-size: var(--text-sm);
-      font-weight: 600;
-      color: var(--color-text-primary);
-      flex: 1;
-    }
-
-    .candidate-score {
-      font-size: 11px;
-      background: #d1fae5;
-      color: #047857;
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-weight: 700;
-    }
-
-    .candidate-summary {
-      font-size: var(--text-xs);
-      color: var(--color-text-secondary);
-      line-height: 1.5;
-      margin-bottom: var(--space-2);
-    }
-
-    .candidate-detail {
-      font-size: 10px;
-      color: var(--color-text-tertiary);
-      background: var(--color-bg);
-      padding: var(--space-2);
-      border-radius: var(--radius-sm);
-      margin-top: var(--space-2);
-    }
-
-    .candidate-detail strong { color: var(--color-text-secondary); }
-
-    .topic-actions {
-      display: flex;
-      gap: var(--space-2);
-      flex-wrap: wrap;
-      margin-top: var(--space-3);
-      padding-top: var(--space-3);
-      border-top: 1px solid var(--color-border-light);
-    }
-
-    .feedback-section {
-      background: #fef3c7;
-      border: 1px solid #fde68a;
-      border-radius: var(--radius-lg);
-      padding: var(--space-4);
-      margin-top: var(--space-3);
-    }
-
-    .feedback-section h4 {
-      font-size: var(--text-sm);
-      font-weight: 600;
-      color: #92400e;
-      margin-bottom: var(--space-2);
-    }
-
-    .feedback-history { display: grid; gap: var(--space-2); margin-bottom: var(--space-3); }
-
-    .feedback-item {
-      background: #fff;
-      border-radius: var(--radius-md);
-      padding: var(--space-2) var(--space-3);
-      font-size: var(--text-xs);
-    }
-
-    .feedback-item .round { font-weight: 600; color: #92400e; }
-    .feedback-item .text { color: var(--color-text-primary); margin-top: 2px; }
-
-    .feedback-input { display: grid; gap: var(--space-2); }
-
-    .feedback-input textarea {
-      width: 100%;
-      border: 1px solid #fde68a;
-      border-radius: var(--radius-md);
-      padding: var(--space-2);
-      font-size: var(--text-sm);
-      font-family: var(--font-sans);
-      resize: vertical;
-      min-height: 60px;
-    }
-
-    .feedback-input textarea:focus { outline: none; border-color: #f59e0b; }
-
-    .topic-detail { display: grid; gap: var(--space-3); }
-
-    .field { display: grid; gap: var(--space-1); }
 
     .field label {
       font-size: var(--text-xs);
-      color: var(--color-text-secondary);
       font-weight: 600;
+      color: var(--color-text-secondary);
     }
 
     .field input,
     .field textarea {
-      width: 100%;
+      padding: var(--space-2) var(--space-3);
       border: 1px solid var(--color-border);
       border-radius: var(--radius-md);
-      background: #fff;
+      background: var(--color-bg);
       color: var(--color-text-primary);
-      font-family: var(--font-sans);
       font-size: var(--text-sm);
-      padding: var(--space-2) var(--space-3);
     }
 
     .field input:focus,
     .field textarea:focus {
       outline: none;
       border-color: var(--color-accent);
-      box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
     }
 
-    .field textarea { min-height: 80px; resize: vertical; }
-
-    .confirm-section {
-      background: #ecfdf5;
-      border: 1px solid #a7f3d0;
-      border-radius: var(--radius-lg);
-      padding: var(--space-4);
-      margin-top: var(--space-3);
+    .field textarea {
+      min-height: 80px;
+      resize: vertical;
     }
 
-    .confirm-section h4 {
-      font-size: var(--text-sm);
-      font-weight: 600;
-      color: #065f46;
-      margin-bottom: var(--space-2);
-    }
-
-    .empty {
-      border: 1px dashed var(--color-border);
-      border-radius: var(--radius-md);
-      padding: var(--space-4);
-      text-align: center;
-      font-size: var(--text-sm);
-      color: var(--color-text-tertiary);
-    }
-
-    .empty-waiting {
-      background: var(--color-bg);
-      border: 1px dashed var(--color-border);
-      border-radius: var(--radius-md);
-      padding: var(--space-6);
-      text-align: center;
-    }
-
-    .empty-waiting .icon { font-size: 32px; margin-bottom: var(--space-2); }
-
-    .api-status {
-      font-size: 10px;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-weight: 600;
-    }
-
-    .api-status.connected { background: #d1fae5; color: #065f46; }
-    .api-status.disconnected { background: #fee2e2; color: #991b1b; }
-    .api-status.connecting { background: #fef3c7; color: #92400e; }
-
-    .task-id {
-      font-size: 10px;
-      background: var(--color-bg);
-      color: var(--color-text-tertiary);
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-family: monospace;
-      margin-left: var(--space-2);
-    }
-
-    .message-log {
-      background: var(--color-bg);
-      border: 1px solid var(--color-border-light);
-      border-radius: var(--radius-md);
+    .confirm-btn {
+      width: 100%;
       padding: var(--space-3);
-      font-size: 11px;
-      max-height: 200px;
-      overflow-y: auto;
-      margin-top: var(--space-3);
-    }
-
-    .message-item {
-      padding: var(--space-1) 0;
-      border-bottom: 1px solid var(--color-border-light);
-    }
-
-    .message-item:last-child { border-bottom: none; }
-
-    .message-time { color: var(--color-text-tertiary); margin-right: var(--space-2); }
-    .message-from { font-weight: 600; color: var(--color-accent); }
-    .message-from.user { color: #4338ca; }
-    .message-content { color: var(--color-text-primary); margin-top: 2px; }
-
-    .paper-preview {
-      background: var(--color-bg);
-      border: 1px solid var(--color-border-light);
+      border: none;
       border-radius: var(--radius-lg);
-      padding: var(--space-3);
-      margin-top: var(--space-3);
-      max-height: 400px;
-      overflow-y: auto;
-    }
-
-    .paper-preview h4 {
+      background: var(--color-accent);
+      color: white;
       font-size: var(--text-sm);
-      font-weight: 700;
-      color: var(--color-text-primary);
-      margin-bottom: var(--space-3);
-      padding-bottom: var(--space-2);
-      border-bottom: 1px solid var(--color-border-light);
-    }
-
-    .preview-section {
-      margin-bottom: var(--space-3);
-    }
-
-    .preview-label {
-      font-size: var(--text-xs);
       font-weight: 600;
-      color: var(--color-text-tertiary);
-      margin-bottom: 2px;
+      cursor: pointer;
     }
 
-    .preview-value {
-      font-size: var(--text-sm);
-      color: var(--color-text-primary);
-      line-height: 1.5;
+    .confirm-btn:hover:not(:disabled) {
+      background: var(--color-accent-hover);
     }
 
-    .preview-value.title {
-      font-weight: 700;
-      font-size: var(--text-base);
-    }
-
-    .preview-value.abstract {
-      max-height: 150px;
-      overflow-y: auto;
-      background: var(--color-surface);
-      padding: var(--space-2);
-      border-radius: var(--radius-md);
-      text-align: justify;
-    }
-
-    .preview-value .keyword-tag {
-      display: inline-block;
-      background: var(--color-accent-light);
-      color: var(--color-accent);
-      padding: 2px 8px;
-      border-radius: 999px;
-      font-size: var(--text-xs);
-      margin: 2px 4px 2px 0;
-      font-weight: 600;
-    }
-
-    .analysis-records {
-      background: var(--color-surface);
-      padding: var(--space-2);
-      border-radius: var(--radius-md);
-    }
-
-    .record-item {
-      font-size: var(--text-xs);
-      padding: 4px 0;
-      border-bottom: 1px solid var(--color-border-light);
-    }
-
-    .record-item:last-child {
-      border-bottom: none;
-    }
-
-    .record-item.info {
-      color: var(--color-accent);
-    }
-
-    .record-item.error {
-      color: #ef4444;
+    .confirm-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
     }
 
     @media (max-width: 1280px) {
-      .layout { grid-template-columns: 1fr; }
-      .panel { min-height: auto; }
+      .layout {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    @media (max-width: 768px) {
+      .layout {
+        grid-template-columns: 1fr;
+      }
     }
   `;
-
-  @state() private taskId: string | null = null;
-  @state() private paperMetadata: any = null;
-  @state() private paperTabIndex: number = 0;
-  @state() private paperList: {filename: string, pageCount?: number}[] = [];
-  @state() private selectedPaperIndex: number = 0;
-  @state() private paperViewerOpen: boolean = true;
-  @state() private taskStatus: TaskStatus | null = null;
-  @state() private topics: TopicCandidate[] = [];
-  @state() private selectedTopicId: number | null = null;
-  @state() private selectedTopic: SelectedTopic = {
-    title: '',
-    researchObjective: '',
-    expectedContribution: '',
-    selectedCandidateId: null
-  };
-  @state() private feedbackHistory: Array<{feedback: string; timestamp: Date}> = [];
-  @state() private currentFeedback = '';
-  @state() private feedbackSubmitting = false;
-  @state() private dragover = false;
-
-  // Debug mode
-  @state() private debugMode = false;
-  @state() private debugLogs: Array<{timestamp: number; level: string; action: string; data: any}> = [];
-
-  @state() private apiConnected = false;
-  @state() private apiChecking = true;
-  @state() private errorMessage = '';
-
-  private pollInterval: number | null = null;
-
-  connectedCallback() {
-    super.connectedCallback();
-    // Initialize in order
-    this.checkApiConnection();
-    // Delay loadExistingTask to ensure API connection is ready
-    setTimeout(() => this.loadExistingTask(), 100);
-  }
   // LocalStorage helpers
   private saveTaskId(taskId: string | null) {
     if (taskId) {
@@ -2103,6 +1305,195 @@ export class ConfigStage extends LitElement {
               ✓ 确认选题，进入 Literature 阶段 →
             </button>
           </div>
+        </article>
+      </section>
+    `;
+  }
+}
+
+declare global {
+  interface HTMLElementTagNameMap {
+    'config-stage': ConfigStage;
+  }
+}
+    'config-stage': ConfigStage;
+  }
+}
+
+  render() {
+    const hasTask = !!this.taskId;
+    const hasTopics = this.topics.length > 0;
+    const isProcessing = this.taskStatus?.stage_status === 'processing';
+
+    return html`
+      <section class="layout">
+        <!-- Panel 1: 参考论文上传 -->
+        <article class="panel panel-upload">
+          <h3>
+            <span class="step">1</span>参考论文上传
+            <span class="api-status ${this.apiConnected ? 'connected' : 'disconnected'}">
+              ${this.apiConnected ? '已连接' : '未连接'}
+            </span>
+          </h3>
+          <p>拖拽或点击上传 PDF 论文</p>
+          
+          <label class="dropzone ${this.dragover ? 'dragover' : ''}"
+            @drop=${this.onDrop}
+            @dragover=${this.onDragOver}
+            @dragleave=${this.onDragLeave}
+          >
+            <input type="file" multiple accept=".pdf" @change=${this.onReferenceFileInput}>
+            <p>📄 拖拽 PDF 到这里</p>
+            <p class="subtle">支持多文件上传</p>
+          </label>
+
+          ${this.errorMessage ? html`
+            <div class="error-msg">${this.errorMessage}</div>
+          ` : ''}
+
+          <button @click=${() => this.shadowRoot?.querySelector('label.dropzone input')?.click()}>
+            + 继续添加论文
+          </button>
+        </article>
+
+        <!-- Panel 2: 参考论文库（独立区域，直接在上传下方） -->
+        <article class="panel panel-library">
+          <h3><span class="step">2</span>参考论文库</h3>
+          
+          ${this.uploadedPapersCount === 0 ? html`
+            <div class="empty-state">
+              <p>📂 尚未上传参考论文</p>
+              <p class="hint">请在上方区域上传 PDF 论文</p>
+            </div>
+          ` : html`
+            ${this.paperList.length > 1 ? html`
+              <div class="paper-tabs">
+                ${this.paperList.map((paper: any, idx: number) => html`
+                  <button 
+                    class="paper-tab ${idx === this.selectedPaperIndex ? 'active' : ''}"
+                    @click=${() => this.selectPaper(idx)}
+                  >
+                    📄 ${idx + 1}
+                  </button>
+                `)}
+              </div>
+            ` : ''}
+            
+            ${this.paperMetadata ? html`
+              <div class="paper-preview">
+                <div class="preview-title">${this.paperMetadata.title || '未知标题'}</div>
+                ${this.paperMetadata.authors ? html`
+                  <div class="preview-authors">👥 ${this.paperMetadata.authors}</div>
+                ` : ''}
+                ${this.paperMetadata.pageCount ? html`
+                  <div class="preview-meta">📄 ${this.paperMetadata.pageCount} 页</div>
+                ` : ''}
+                ${this.paperMetadata.abstract ? html`
+                  <div class="preview-abstract">
+                    <strong>摘要：</strong>${this.paperMetadata.abstract.substring(0, 300)}...
+                  </div>
+                ` : ''}
+                ${this.paperMetadata.keywords?.length ? html`
+                  <div class="preview-keywords">
+                    ${this.paperMetadata.keywords.slice(0, 6).map((k: string) => html`<span class="kw">${k}</span>`)}
+                  </div>
+                ` : ''}
+              </div>
+            ` : html`
+              <div class="loading-state">正在加载论文内容...</div>
+            `}
+          `}
+        </article>
+
+        <!-- Panel 3: 分析与选题推荐 -->
+        <article class="panel panel-topics">
+          <h3><span class="step">3</span>分析与选题推荐</h3>
+          
+          ${isProcessing ? html`
+            <div class="processing">
+              <div class="spinner"></div>
+              <p>正在分析论文内容...</p>
+              <div class="progress-bar">
+                <div class="progress-fill" style="width: ${this.progressPercent}%"></div>
+              </div>
+            </div>
+          ` : ''}
+          
+          ${hasTopics ? html`
+            <div class="topics-list">
+              ${this.topics.map(topic => html`
+                <div 
+                  class="topic-card ${this.selectedTopicId === topic.id ? 'selected' : ''}"
+                  @click=${() => this.selectTopic(topic)}
+                >
+                  <div class="topic-header">
+                    <span class="topic-title">${topic.title}</span>
+                    <span class="topic-score">${topic.score}</span>
+                  </div>
+                  <div class="topic-summary">${topic.summary || ''}</div>
+                </div>
+              `)}
+            </div>
+          ` : html`
+            <div class="empty-state">
+              <p>${this.uploadedPapersCount > 0 ? '分析中...' : '上传论文后自动生成选题'}</p>
+            </div>
+          `}
+        </article>
+
+        <!-- Panel 4: 选题详情与确认（处理日志在顶部） -->
+        <article class="panel panel-detail">
+          <h3><span class="step">4</span>选题详情与确认</h3>
+          
+          ${hasTask && this.taskStatus?.messages?.length ? html`
+            <div class="message-log-top">
+              <div class="log-header">📋 处理日志</div>
+              ${this.taskStatus.messages.slice(-4).map(msg => html`
+                <div class="log-entry">
+                  <span class="log-time">${new Date(msg.timestamp).toLocaleTimeString()}</span>
+                  <span class="log-content">${msg.content}</span>
+                </div>
+              `)}
+            </div>
+          ` : ''}
+          
+          <div class="topic-detail">
+            <div class="field">
+              <label>论文标题</label>
+              <input
+                type="text"
+                placeholder="选择或输入论文标题"
+                .value=${this.selectedTopic.title || ''}
+                @input=${(e: Event) => this.updateTopicField('title', (e.target as HTMLInputElement).value)}
+              >
+            </div>
+
+            <div class="field">
+              <label>研究目标</label>
+              <textarea
+                placeholder="描述研究的核心目标..."
+                .value=${this.selectedTopic.researchObjective || ''}
+                @input=${(e: Event) => this.updateTopicField('researchObjective', (e.target as HTMLTextAreaElement).value)}
+              ></textarea>
+            </div>
+
+            <div class="field">
+              <label>预期贡献</label>
+              <textarea
+                placeholder="说明研究的创新点和贡献..."
+                .value=${this.selectedTopic.expectedContribution || ''}
+                @input=${(e: Event) => this.updateTopicField('expectedContribution', (e.target as HTMLTextAreaElement).value)}
+              ></textarea>
+            </div>
+          </div>
+
+          <button 
+            class="confirm-btn" 
+            ?disabled=${!this.selectedTopic.title?.trim()}
+            @click=${this.confirmTopic}
+          >
+            ✓ 确认选题，进入 Literature 阶段 →
+          </button>
         </article>
       </section>
     `;
