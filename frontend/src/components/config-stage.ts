@@ -109,6 +109,217 @@ export class ConfigStage extends LitElement {
       color: var(--color-text-secondary);
     }
 
+    .upload-panel {
+      background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-bg) 100%);
+    }
+
+    .preview-panel {
+      background: var(--color-surface);
+    }
+
+    .topics-panel {
+      background: linear-gradient(135deg, var(--color-bg) 0%, var(--color-surface) 100%);
+    }
+
+    .upload-status {
+      display: flex;
+      align-items: center;
+      gap: var(--space-2);
+      padding: var(--space-2) var(--space-3);
+      background: var(--color-bg);
+      border-radius: var(--radius-md);
+      font-size: var(--text-sm);
+      color: var(--color-text-secondary);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--color-border);
+    }
+
+    .status-dot.done {
+      background: #10b981;
+    }
+
+    .status-dot.processing {
+      background: #f59e0b;
+      animation: pulse 1s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .processing-text {
+      color: #f59e0b;
+      font-weight: 600;
+    }
+
+    .paper-tabs {
+      margin-bottom: var(--space-3);
+    }
+
+    .tabs-list {
+      display: flex;
+      gap: var(--space-2);
+      flex-wrap: wrap;
+    }
+
+    .tab-btn {
+      padding: var(--space-1) var(--space-3);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      background: var(--color-bg);
+      color: var(--color-text-secondary);
+      font-size: var(--text-xs);
+      font-weight: 600;
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .tab-btn:hover {
+      border-color: var(--color-accent);
+      color: var(--color-accent);
+    }
+
+    .tab-btn.active {
+      background: var(--color-accent);
+      border-color: var(--color-accent);
+      color: white;
+    }
+
+    .empty-preview {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: var(--space-8);
+      text-align: center;
+      color: var(--color-text-tertiary);
+    }
+
+    .empty-preview .empty-icon {
+      font-size: 48px;
+      margin-bottom: var(--space-3);
+      opacity: 0.5;
+    }
+
+    .empty-preview p {
+      font-size: var(--text-sm);
+      color: var(--color-text-tertiary);
+    }
+
+    .paper-preview {
+      display: grid;
+      gap: var(--space-3);
+    }
+
+    .preview-section {
+      display: grid;
+      gap: var(--space-1);
+    }
+
+    .preview-label {
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: var(--color-text-tertiary);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .preview-value {
+      font-size: var(--text-sm);
+      color: var(--color-text-primary);
+      line-height: 1.6;
+    }
+
+    .preview-value.title {
+      font-size: var(--text-base);
+      font-weight: 700;
+      color: var(--color-text-primary);
+    }
+
+    .preview-value.abstract {
+      max-height: 150px;
+      overflow-y: auto;
+      background: var(--color-bg);
+      padding: var(--space-2);
+      border-radius: var(--radius-md);
+      text-align: justify;
+    }
+
+    .preview-value.keywords {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-1);
+    }
+
+    .keyword-tag {
+      background: var(--color-accent-light);
+      color: var(--color-accent);
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: var(--text-xs);
+      font-weight: 600;
+    }
+
+    .analysis-records {
+      background: var(--color-bg);
+      padding: var(--space-2);
+      border-radius: var(--radius-md);
+      font-size: var(--text-xs);
+    }
+
+    .record-item {
+      padding: var(--space-1) 0;
+      border-bottom: 1px solid var(--color-border-light);
+      color: var(--color-text-secondary);
+    }
+
+    .record-item:last-child {
+      border-bottom: none;
+    }
+
+    .record-item.info {
+      color: var(--color-accent);
+    }
+
+    .record-item.error {
+      color: #ef4444;
+    }
+
+    .message-log {
+      margin-top: var(--space-4);
+      padding-top: var(--space-3);
+      border-top: 1px solid var(--color-border-light);
+    }
+
+    .message-log strong {
+      display: block;
+      font-size: var(--text-xs);
+      color: var(--color-text-tertiary);
+      margin-bottom: var(--space-2);
+    }
+
+    .message-item {
+      display: flex;
+      gap: var(--space-2);
+      font-size: var(--text-xs);
+      padding: var(--space-1) 0;
+    }
+
+    .message-time {
+      color: var(--color-text-tertiary);
+      flex-shrink: 0;
+    }
+
+    .message-content {
+      color: var(--color-text-secondary);
+    }
+
     .dropzone {
       border: 1.5px dashed var(--color-border);
       border-radius: var(--radius-lg);
@@ -619,6 +830,7 @@ export class ConfigStage extends LitElement {
 
   @state() private taskId: string | null = null;
   @state() private paperMetadata: any = null;
+  @state() private paperTabIndex: number = 0;
   @state() private taskStatus: TaskStatus | null = null;
   @state() private topics: TopicCandidate[] = [];
   @state() private selectedTopicId: number | null = null;
@@ -846,13 +1058,19 @@ export class ConfigStage extends LitElement {
       if (response.ok) {
         const data = await response.json();
         if (data.papers && data.papers.length > 0) {
-          // Use the first paper's metadata
-          this.paperMetadata = data.papers[0].metadata;
+          // Use the selected tab's paper metadata
+          const idx = Math.min(this.paperTabIndex, data.papers.length - 1);
+          this.paperMetadata = data.papers[idx]?.metadata || null;
         }
       }
     } catch (e) {
       console.error('Failed to load paper metadata:', e);
     }
+  }
+
+  private selectPaperTab(index: number) {
+    this.paperTabIndex = index;
+    this.loadPaperMetadata();
   }
 
 
