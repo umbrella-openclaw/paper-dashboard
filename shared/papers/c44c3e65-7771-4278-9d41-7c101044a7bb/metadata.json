@@ -1,0 +1,47 @@
+{
+  "papers": [
+    {
+      "id": 1,
+      "filename": "Periyadurai ç­ - 2024 - Numerical modeling of magnetohydrodynamic non-Newtonian flow in a cross-slot.pdf",
+      "metadata": {
+        "title": "R E S E A R C H A R T I C L E Numerical modeling of magnetohydrodynamic non-Newtonian flow in a cross-slot K",
+        "authors": "K. Periyadurai, C. Pascoa, M. Abdollahzadehsangroudi, J. Oliveira, M. Abdollahzadehsangroudi, A. For",
+        "abstract": "This study numerically investigates the characteristics of a non-Newtonian magnetohydrodynamic flow in a cross-slot. Numerical simulations are per- formed using power law, Bird – Carreau and Casson non-Newtonian fluid models. The flow characteristics and shear viscosity behavior in the flow region are analyzed for different values of magnetic field. Additionally, the dynamic behavior of the bifurcated flow in the cross-slot is studied in detail, and the computational results are compared with existing models. It is shown that the fluid velocity is reduced in both the inlet and outlet channels of the cross-slot due to the magnetic field, regardless of the viscosity model. More- over, it is found that the fluid viscosity increases along the centerline of the inlet channels and decreases in the outlet channels of the cross-slot for all non-Newtonian fluid models tested here. Furthermore, this study shows that the flow properties of the non-Newtonian fluids can be controlled by changing the magnetic field strength. The results of this study will be useful for analyzing the flow behavior of blood in a microfluidic cross-slot and other rheological fluids used in biochemical engineering and industrial processes, where higher mass transfer and mixing efficiency can be achieved by imposing an external magnetic field. Highlights • Simulation of non-Newtonian magnetohydrodynamic flow in a cross-slot is conducted. • Analysis of the flow and shear viscosity behavior for different Hartman number is performed. • Flow properties were successfully controlled with the imposed external magnetic field",
+        "keywords": [],
+        "contentSummary": "This study numerically investigates the characteristics of a non-Newtonian magnetohydrodynamic flow in a cross-slot. Numerical simulations are per- formed using power law, Bird – Carreau and Casson non-Newtonian fluid models. The flow characteristics and shear viscosity behavior in the flow region are analyzed for different values of magnetic field. Additionally, the dynamic behavior of the bifurcated flow in the cross-slot is studied in detail, and the computational results are compared with ex",
+        "pageCount": 21,
+        "textLength": 89808,
+        "analysisRecords": [
+          {
+            "type": "info",
+            "content": "文件: Periyadurai ç­ - 2024 - Numerical modeling of magnetohydrodynamic non-Newtonian flow in a cross-slot.pdf"
+          },
+          {
+            "type": "info",
+            "content": "页数: 21 页"
+          },
+          {
+            "type": "info",
+            "content": "提取文本: 89808 字符"
+          },
+          {
+            "type": "info",
+            "content": "标题: R E S E A R C H A R T I C L E Numerical modeling of magnetoh..."
+          },
+          {
+            "type": "info",
+            "content": "作者: K. Periyadurai, C. Pascoa, M. Abdollahzadehsangroudi, J. Oliveira, M. Abdollahzadehsangroudi, A. For"
+          },
+          {
+            "type": "info",
+            "content": "摘要已提取"
+          },
+          {
+            "type": "info",
+            "content": "正在进行选题分析..."
+          }
+        ]
+      }
+    }
+  ]
+}
