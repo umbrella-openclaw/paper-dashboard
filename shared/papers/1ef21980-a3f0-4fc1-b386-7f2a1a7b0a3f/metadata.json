@@ -42,6 +42,45 @@
           }
         ]
       }
+    },
+    {
+      "id": 2,
+      "filename": "c2sm25215e.pdf",
+      "metadata": {
+        "title": "Elastic instabilities in a microfluidic cross-slot flow of wormlike micellar solutions",
+        "authors": "Q. Shen, M. View, M. View, M. View, M. View, V. Fig",
+        "abstract": "",
+        "keywords": [],
+        "contentSummary": ". Shen * Received 30th January 2012, Accepted 27th March 2012 DOI: 10.1039/c2sm25215e We present a series of experiments involving an elastic instability that occurs with the flow of wormlike micellar solutions in a microfluidic cross-slot device. We use four different concentrations of an aqueous solution of cetyltrimethylammonium bromide (CTAB) and sodium salicylate (NaSal); two highly viscoelastic and two weakly viscoelastic. Flow in the microfluidic cross-slot device is examined using birefr",
+        "pageCount": 10,
+        "textLength": 49985,
+        "analysisRecords": [
+          {
+            "type": "info",
+            "content": "文件: c2sm25215e.pdf"
+          },
+          {
+            "type": "info",
+            "content": "页数: 10 页"
+          },
+          {
+            "type": "info",
+            "content": "提取文本: 49985 字符"
+          },
+          {
+            "type": "info",
+            "content": "标题: Elastic instabilities in a microfluidic cross-slot flow of w..."
+          },
+          {
+            "type": "info",
+            "content": "作者: Q. Shen, M. View, M. View, M. View, M. View, V. Fig"
+          },
+          {
+            "type": "info",
+            "content": "正在进行选题分析..."
+          }
+        ]
+      }
     }
   ]
 }

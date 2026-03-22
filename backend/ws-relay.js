@@ -218,12 +218,12 @@ wss.on('connection', (ws, req) => {
   });
 });
 
-server.listen(RELAY_PORT, '0.0.0.0', () => {
+server.listen(RELAY_PORT, '127.0.0.1', () => {
   console.log(`
 ╔════════════════════════════════════════════════════════════╗
 ║  OpenClaw Gateway WebSocket Relay - Security Enhanced ║
 ║  ─────────────────────────────────────────────────────  ║
-║  Relay:     ws://0.0.0.0:${RELAY_PORT}                         ║
+║  Relay:     ws://127.0.0.1:${RELAY_PORT}                         ║
 ║  Gateway:   ws://${GATEWAY_HOST}:${GATEWAY_PORT}                      ║
 ║  Auth:      X-Api-Key Required                         ║
 ╚════════════════════════════════════════════════════════════╝

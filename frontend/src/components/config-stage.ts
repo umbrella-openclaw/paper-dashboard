@@ -1,7 +1,7 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 
-const API_BASE = 'http://192.168.1.161:8080';
+const API_BASE = 'http://127.0.0.1:8080';
 const API_KEY = '3a3ce9520026e5ca4b4196f964fda10fb71fa224f0c2925fd031373298844f8a';
 
 function apiHeaders() {
@@ -119,6 +119,102 @@ export class ConfigStage extends LitElement {
 
     .topics-panel {
       background: linear-gradient(135deg, var(--color-bg) 0%, var(--color-surface) 100%);
+    }
+
+    .paper-selector {
+      margin-bottom: var(--space-4);
+      padding-bottom: var(--space-3);
+      border-bottom: 1px solid var(--color-border-light);
+    }
+
+    .selector-label {
+      font-size: var(--text-xs);
+      font-weight: 600;
+      color: var(--color-text-tertiary);
+      margin-bottom: var(--space-2);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .paper-tabs {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+    }
+
+    .paper-tab {
+      padding: var(--space-1) var(--space-3);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      background: var(--color-bg);
+      color: var(--color-text-secondary);
+      font-size: var(--text-xs);
+      cursor: pointer;
+      transition: all var(--transition-fast);
+    }
+
+    .paper-tab:hover {
+      border-color: var(--color-accent);
+      color: var(--color-accent);
+    }
+
+    .paper-tab.active {
+      background: var(--color-accent);
+      border-color: var(--color-accent);
+      color: white;
+    }
+
+    .paper-preview-mini {
+      background: var(--color-bg);
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-lg);
+      padding: var(--space-3);
+      margin-bottom: var(--space-4);
+    }
+
+    .preview-header {
+      font-size: var(--text-sm);
+      font-weight: 700;
+      color: var(--color-text-primary);
+      margin-bottom: var(--space-2);
+    }
+
+    .preview-authors {
+      font-size: var(--text-xs);
+      color: var(--color-text-secondary);
+      margin-bottom: var(--space-2);
+    }
+
+    .preview-abstract {
+      font-size: var(--text-xs);
+      color: var(--color-text-tertiary);
+      line-height: 1.5;
+      max-height: 80px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .preview-keywords {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-1);
+      margin-top: var(--space-2);
+    }
+
+    .kw {
+      background: var(--color-accent-light);
+      color: var(--color-accent);
+      padding: 2px 6px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    .empty-papers {
+      text-align: center;
+      padding: var(--space-4);
+      color: var(--color-text-tertiary);
+      font-size: var(--text-sm);
     }
 
     .upload-status {
@@ -831,6 +927,8 @@ export class ConfigStage extends LitElement {
   @state() private taskId: string | null = null;
   @state() private paperMetadata: any = null;
   @state() private paperTabIndex: number = 0;
+  @state() private paperList: {filename: string, pageCount?: number}[] = [];
+  @state() private selectedPaperIndex: number = 0;
   @state() private taskStatus: TaskStatus | null = null;
   @state() private topics: TopicCandidate[] = [];
   @state() private selectedTopicId: number | null = null;
@@ -963,36 +1061,55 @@ export class ConfigStage extends LitElement {
   }
 
   private async createTask() {
-    console.log('[ConfigStage] createTask called, apiConnected:', this.apiConnected);
-    this.debug('log', 'checkApiConnection_start');
-    this.debug('log', 'createTask_start', { apiConnected: this.apiConnected });
+    console.log('[ConfigStage] createTask called');
+    this.errorMessage = '';
+    
+    // Wait for API connection if not already connected
     if (!this.apiConnected) {
-      this.errorMessage = '后端服务未连接，请刷新页面重试';
-      return;
+      console.log('[ConfigStage] Waiting for API connection...');
+      let retries = 0;
+      while (!this.apiConnected && retries < 50) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+        retries++;
+      }
+      if (!this.apiConnected) {
+        this.errorMessage = '后端服务未连接，请检查网络后重试';
+        console.error('[ConfigStage] API not connected after waiting');
+        return;
+      }
     }
+    
+    console.log('[ConfigStage] API connected, creating task');
 
-    // Clear old task data first to prevent showing old papers
+    // Clear old task data first - this is intentional for new paper workflow
     this.taskId = null;
     this.taskStatus = null;
-    // Papers are tracked via taskStatus, no local state needed
+    this.paperMetadata = null;
     this.topics = [];
     this.selectedTopicId = null;
     this.selectedTopic = { title: '', researchObjective: '', expectedContribution: '', selectedCandidateId: null };
     this.saveTaskId(null);
 
     try {
+      console.log('[ConfigStage] Calling POST /api/tasks');
       const response = await apiFetch(`${API_BASE}/api/tasks`, { method: 'POST' });
+      
       if (response.ok) {
         const data = await response.json();
+        console.log('[ConfigStage] Task created:', data.task_id);
         this.taskId = data.task_id;
         this.saveTaskId(data.task_id);
         this.taskStatus = data.status;
         this.startPolling();
         this.notifyReadyState();
+      } else {
+        const errorText = await response.text();
+        console.error('[ConfigStage] Create task failed:', response.status, errorText);
+        this.errorMessage = `创建任务失败: HTTP ${response.status}`;
       }
     } catch (e) {
+      console.error('[ConfigStage] Create task exception:', e);
       this.errorMessage = `创建任务失败: ${(e as Error).message}`;
-      throw e; // 重新抛出异常，让调用者知道失败了
     }
   }
 
@@ -1058,9 +1175,18 @@ export class ConfigStage extends LitElement {
       if (response.ok) {
         const data = await response.json();
         if (data.papers && data.papers.length > 0) {
-          // Use the selected tab's paper metadata
-          const idx = Math.min(this.paperTabIndex, data.papers.length - 1);
+          // Load paper list for tabs
+          this.paperList = data.papers.map((p: any) => ({
+            filename: p.filename,
+            pageCount: p.metadata?.pageCount
+          }));
+          
+          // Use the selected paper's metadata
+          const idx = Math.min(this.selectedPaperIndex, data.papers.length - 1);
           this.paperMetadata = data.papers[idx]?.metadata || null;
+        } else {
+          this.paperList = [];
+          this.paperMetadata = null;
         }
       }
     } catch (e) {
@@ -1068,8 +1194,8 @@ export class ConfigStage extends LitElement {
     }
   }
 
-  private selectPaperTab(index: number) {
-    this.paperTabIndex = index;
+  private selectPaper(index: number) {
+    this.selectedPaperIndex = index;
     this.loadPaperMetadata();
   }
 

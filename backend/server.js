@@ -29,7 +29,7 @@ function getApiKey() {
 }
 
 const API_KEY = getApiKey();
-const ALLOWED_ORIGINS = ['http://192.168.1.161:3460', 'http://localhost:3000', 'http://localhost:8080'];
+const ALLOWED_ORIGINS = ['http://127.0.0.1:3460', 'http://localhost:3460', 'http://localhost:3000', 'http://localhost:8080'];
 
 function requireApiKey(req, res, next) {
   // Keep task-status lookup public so unknown tasks return 404 instead of auth errors.
@@ -487,7 +487,7 @@ app.use((error, req, res, next) => {
   res.status(500).json({ error: error.message });
 });
 
-app.listen(PORT, '0.0.0.0', () => {
+app.listen(PORT, '127.0.0.1', () => {
   logger.api('info', 'Server started', { port: PORT });
   console.log(`\n╔════════════════════════════════════════════════════════════╗`);
   console.log(`║  Paper Dashboard Backend                          ║`);
