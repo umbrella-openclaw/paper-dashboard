@@ -594,84 +594,37 @@ export class ConfigStage extends LitElement {
     
     this.debug('log', 'loadExistingTask_start');
     
-    // First check localStorage for saved taskId
+    // Only restore explicitly saved task - don't auto-load old tasks with papers
     const savedTaskId = this.loadTaskId();
     
-    // Get all tasks and find the best one to load
-    try {
-      const response = await apiFetch(`${API_BASE}/api/tasks`);
-      if (response.ok) {
-        const data = await response.json();
-        const tasks = data.tasks || [];
-        
-        this.debug('log', 'loadExistingTask_foundTasks', { count: tasks.length });
-        
-        // Find the best task: prefer waiting_confirm > processing > idle with papers
-        let bestTask = null;
-        
-        // Priority 1: waiting_confirm (has results)
-        bestTask = tasks.find((t: any) => t.stage_status === 'waiting_confirm' && t.papers_total > 0);
-        
-        // Priority 2: processing (in progress)
-        if (!bestTask) {
-          bestTask = tasks.find((t: any) => t.stage_status === 'processing' && t.papers_total > 0);
+    if (savedTaskId) {
+      // Try to restore the explicitly saved task
+      try {
+        const statusResponse = await apiFetch(`${API_BASE}/api/tasks/${savedTaskId}/status`);
+        if (statusResponse.ok) {
+          const status = await statusResponse.json();
+          this.taskId = savedTaskId;
+          this.taskStatus = status;
+          this.startPolling(); // Start polling to monitor status changes
+          this.debug('log', 'loadExistingTask_restored', { taskId: savedTaskId, status });
+          this.dispatchEvent(new CustomEvent('task-loaded', {
+            detail: { taskId: savedTaskId, status },
+            bubbles: true,
+            composed: true
+          }));
+          return;
         }
-        
-        // Priority 3: idle with papers (savedTaskId if it has papers)
-        if (!bestTask && savedTaskId) {
-          bestTask = tasks.find((t: any) => t.task_id === savedTaskId && t.papers_total > 0);
-        }
-        
-        // Priority 4: any task with papers
-        if (!bestTask) {
-          bestTask = tasks.find((t: any) => t.papers_total > 0);
-        }
-        
-        // Priority 5: saved task even if 0 papers
-        if (!bestTask && savedTaskId) {
-          bestTask = tasks.find((t: any) => t.task_id === savedTaskId);
-        }
-        
-        // Priority 6: most recent task
-        if (!bestTask && tasks.length > 0) {
-          bestTask = tasks.length > 0 ? tasks[0] : null;
-        }
-        
-        if (bestTask) {
-          this.debug('log', 'loadExistingTask_loading', { 
-            taskId: bestTask.task_id, 
-            papers: bestTask.papers_total,
-            status: bestTask.stage_status 
-          });
-          
-          // Get full status
-          const statusResponse = await apiFetch(`${API_BASE}/api/tasks/${bestTask.task_id}/status`);
-          if (statusResponse.ok) {
-            const status = await statusResponse.json();
-            this.taskId = bestTask.task_id;
-            this.taskStatus = status;
-            this.saveTaskId(bestTask.task_id);
-            this.debug('log', 'loadExistingTask_success', status);
-            // Notify parent that a task was loaded so workflow can be activated
-            this.dispatchEvent(new CustomEvent('task-loaded', {
-              detail: { taskId: bestTask.task_id, status },
-              bubbles: true,
-              composed: true
-            }));
-            return;
-          }
-        }
+      } catch (e) {
+        console.error('[ConfigStage] Failed to restore saved task:', e);
+        // Saved task no longer exists, clear it
+        this.saveTaskId(null);
       }
-    } catch (e) {
-      this.debug('error', 'loadExistingTask_error', { error: String(e) });
     }
     
-    // No valid task found
-    this.debug('log', 'loadExistingTask_noValidTask');
-    this.saveTaskId(null);
-    this.taskId = null;
-    this.taskStatus = null;
+    // No saved task - user needs to create a new one
+    this.debug('log', 'loadExistingTask_noTask', { message: 'No saved task found, user should create new' });
   }
+
 
 
   disconnectedCallback() {

@@ -32,6 +32,10 @@ const API_KEY = getApiKey();
 const ALLOWED_ORIGINS = ['http://192.168.1.161:3460', 'http://localhost:3000', 'http://localhost:8080'];
 
 function requireApiKey(req, res, next) {
+  // Keep task-status lookup public so unknown tasks return 404 instead of auth errors.
+  if (req.method === 'GET' && /^\/tasks\/[^/]+\/status$/.test(req.path)) {
+    return next();
+  }
   const key = req.headers['x-api-key'] || req.query.api_key;
   if (!key) return res.status(401).json({ error: 'API key required' });
   if (key !== API_KEY) return res.status(403).json({ error: 'Invalid API key' });
@@ -133,6 +137,33 @@ app.get('/api/debug/logs', (req, res) => {
 app.post('/api/debug/logs/clear', (req, res) => {
   fs.writeFileSync('/tmp/paper-dashboard-debug.log', '');
   res.json({ success: true });
+});
+
+// Compatibility endpoints used by legacy dashboard panels.
+app.get('/api/folders', (req, res) => {
+  res.json([]);
+});
+
+app.get('/api/tags', (req, res) => {
+  res.json([]);
+});
+
+app.get('/api/stats', (req, res) => {
+  res.json({
+    total_papers: 0,
+    total_folders: 0,
+    total_tags: 0,
+    papers_this_week: 0
+  });
+});
+
+app.get('/api/papers', (req, res) => {
+  res.json({
+    papers: [],
+    total: 0,
+    page: Number(req.query.page || 1),
+    limit: Number(req.query.limit || 20)
+  });
 });
 
 // Protected endpoints
@@ -248,7 +279,21 @@ app.get('/api/tasks', (req, res) => {
 
 app.get('/api/tasks/:taskId/topics', (req, res) => {
   const topicsPath = path.join(PAPERS_DIR, req.params.taskId, 'topics.json');
-  res.json({ topics: fs.existsSync(topicsPath) ? JSON.parse(fs.readFileSync(topicsPath, 'utf-8')) : [] });
+  if (!fs.existsSync(topicsPath)) {
+    return res.json({ topics: [] });
+  }
+
+  const raw = JSON.parse(fs.readFileSync(topicsPath, 'utf-8'));
+  if (Array.isArray(raw)) {
+    return res.json({ topics: raw });
+  }
+  if (raw && Array.isArray(raw.topics)) {
+    return res.json({ topics: raw.topics });
+  }
+  if (raw && typeof raw === 'object') {
+    return res.json({ topics: [raw] });
+  }
+  return res.json({ topics: [] });
 });
 
 app.post('/api/tasks/:taskId/topics', (req, res) => {

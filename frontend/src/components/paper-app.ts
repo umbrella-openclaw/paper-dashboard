@@ -143,14 +143,16 @@ export class PaperApp extends LitElement {
     await this.loadData();
     this.checkExistingWorkflow();
   }
-  // Check for existing workflow task
+  // Check for existing workflow task or show empty state for new task
   private async checkExistingWorkflow() {
     const savedTaskId = localStorage.getItem('paper-dashboard-workflow-task-id');
-    if (savedTaskId) {
-      console.log('[PaperApp] Found existing workflow task:', savedTaskId);
-      // Workflow will be activated when config-stage emits task-loaded event
-      // after it successfully loads the task from the backend
-    }
+    // Always show the workflow UI at INTAKE stage
+    // If there's a saved task, config-stage will restore it
+    // If not, user can create a new task
+    this.workflowActive = true;
+    this.currentStage = 'INTAKE';
+    this.completedStages = [];
+    this.configReady = false;
   }
 
   private onTaskLoaded(e: CustomEvent) {
@@ -220,6 +222,10 @@ export class PaperApp extends LitElement {
   
   // Workflow handlers
   private onCreatePaper() {
+    // Clear any saved task so config-stage creates a fresh one
+    localStorage.removeItem('paper-dashboard-workflow-task-id');
+    localStorage.removeItem('paper-dashboard-task-id');
+    
     this.workflowActive = true;
     this.currentStage = 'INTAKE';
     this.completedStages = [];
@@ -495,17 +501,9 @@ export class PaperApp extends LitElement {
           </main>
         ` : html`
           <div class="stage-bar" style="background: var(--color-surface);">
-            <div style="display: flex; align-items: center; justify-content: space-between;">
-              <span style="font-size: var(--text-sm); color: var(--color-text-tertiary);">
-                当前没有进行中的论文写作任务
-              </span>
-              <button 
-                @click=${this.onCreatePaper}
-                style="padding: var(--space-2) var(--space-4); background: var(--color-accent); border: none; border-radius: var(--radius-md); color: white; font-size: var(--text-sm); font-weight: 600; cursor: pointer;"
-              >
-                创建新论文
-              </button>
-            </div>
+            <span style="font-size: var(--text-sm); color: var(--color-text-tertiary);">
+              当前没有进行中的论文写作任务
+            </span>
           </div>
           
           <aside>
