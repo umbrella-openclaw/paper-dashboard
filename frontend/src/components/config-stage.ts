@@ -217,6 +217,157 @@ export class ConfigStage extends LitElement {
       font-size: var(--text-sm);
     }
 
+    .topic-panel {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+    }
+
+    .paper-reference-viewer {
+      background: var(--color-bg);
+      border: 1px solid var(--color-border-light);
+      border-radius: var(--radius-lg);
+      margin-bottom: var(--space-4);
+      overflow: hidden;
+    }
+
+    .viewer-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: var(--space-3);
+      background: var(--color-surface);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .viewer-header:hover {
+      background: var(--color-bg);
+    }
+
+    .viewer-title {
+      font-size: var(--text-sm);
+      font-weight: 600;
+      color: var(--color-text-primary);
+    }
+
+    .viewer-toggle {
+      font-size: var(--text-xs);
+      color: var(--color-text-tertiary);
+    }
+
+    .viewer-content {
+      padding: var(--space-3);
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .paper-tabs-compact {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      margin-bottom: var(--space-3);
+      padding-bottom: var(--space-3);
+      border-bottom: 1px solid var(--color-border-light);
+    }
+
+    .paper-tab-compact {
+      padding: var(--space-1) var(--space-2);
+      border: 1px solid var(--color-border);
+      border-radius: var(--radius-md);
+      background: var(--color-surface);
+      color: var(--color-text-secondary);
+      font-size: var(--text-xs);
+      cursor: pointer;
+    }
+
+    .paper-tab-compact.active {
+      background: var(--color-accent);
+      border-color: var(--color-accent);
+      color: white;
+    }
+
+    .current-paper-preview {
+      background: var(--color-surface);
+      border-radius: var(--radius-md);
+      padding: var(--space-3);
+    }
+
+    .paper-title-preview {
+      font-size: var(--text-sm);
+      font-weight: 700;
+      color: var(--color-text-primary);
+      margin-bottom: var(--space-2);
+    }
+
+    .paper-authors-preview {
+      font-size: var(--text-xs);
+      color: var(--color-text-secondary);
+      margin-bottom: var(--space-1);
+    }
+
+    .paper-meta-preview {
+      font-size: var(--text-xs);
+      color: var(--color-text-tertiary);
+      margin-bottom: var(--space-2);
+    }
+
+    .paper-abstract-preview {
+      font-size: var(--text-xs);
+      color: var(--color-text-secondary);
+      line-height: 1.6;
+      margin-bottom: var(--space-2);
+      text-align: justify;
+    }
+
+    .paper-keywords-preview {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-1);
+      margin-bottom: var(--space-2);
+    }
+
+    .kw-tag {
+      background: var(--color-accent-light);
+      color: var(--color-accent);
+      padding: 2px 8px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 600;
+    }
+
+    .paper-analysis-preview {
+      background: var(--color-bg);
+      padding: var(--space-2);
+      border-radius: var(--radius-md);
+      font-size: var(--text-xs);
+    }
+
+    .paper-analysis-preview strong {
+      color: var(--color-text-tertiary);
+    }
+
+    .analysis-item {
+      padding: var(--space-1) 0;
+      color: var(--color-text-secondary);
+      border-bottom: 1px solid var(--color-border-light);
+    }
+
+    .analysis-item:last-child {
+      border-bottom: none;
+    }
+
+    .analysis-item.info {
+      color: var(--color-accent);
+    }
+
+    .loading-paper {
+      text-align: center;
+      padding: var(--space-4);
+      color: var(--color-text-tertiary);
+      font-size: var(--text-sm);
+    }
+
     .upload-status {
       display: flex;
       align-items: center;
@@ -929,6 +1080,7 @@ export class ConfigStage extends LitElement {
   @state() private paperTabIndex: number = 0;
   @state() private paperList: {filename: string, pageCount?: number}[] = [];
   @state() private selectedPaperIndex: number = 0;
+  @state() private paperViewerOpen: boolean = true;
   @state() private taskStatus: TaskStatus | null = null;
   @state() private topics: TopicCandidate[] = [];
   @state() private selectedTopicId: number | null = null;
@@ -1197,6 +1349,10 @@ export class ConfigStage extends LitElement {
   private selectPaper(index: number) {
     this.selectedPaperIndex = index;
     this.loadPaperMetadata();
+  }
+
+  private togglePaperViewer() {
+    this.paperViewerOpen = !this.paperViewerOpen;
   }
 
 

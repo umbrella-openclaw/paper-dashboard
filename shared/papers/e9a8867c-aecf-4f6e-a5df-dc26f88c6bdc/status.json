@@ -1,0 +1,34 @@
+{
+  "task_id": "e9a8867c-aecf-4f6e-a5df-dc26f88c6bdc",
+  "stage": "INTAKE",
+  "stage_status": "waiting_confirm",
+  "progress": {
+    "papers_processed": 1,
+    "papers_total": 1,
+    "topics_generated": 3
+  },
+  "result": {
+    "papers_count": 1,
+    "topics_count": 3
+  },
+  "messages": [
+    {
+      "timestamp": "2026-03-22T07:08:15.472Z",
+      "from": "system",
+      "content": "任务已创建: 未指定标题论文"
+    },
+    {
+      "timestamp": "2026-03-22T07:08:15.570Z",
+      "from": "system",
+      "content": "已上传: Periyadurai ç­ - 2024 - Numerical modeling of magnetohydrodynamic non-Newtonian flow in a cross-slot.pdf"
+    },
+    {
+      "timestamp": "2026-03-22T07:08:16.832Z",
+      "from": "system",
+      "content": "已解析: R E S E A R C H A R T I C L E ..."
+    }
+  ],
+  "title": "未指定标题论文",
+  "error": null,
+  "updated_at": "2026-03-22T07:08:16.833Z"
+}
