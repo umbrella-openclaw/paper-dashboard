@@ -1,0 +1,34 @@
+{
+  "papers": [
+    {
+      "id": 1,
+      "filename": "Periyadurai ç­ - 2024 - Numerical modeling of magnetohydrodynamic non-Newtonian flow in a cross-slot.pdf",
+      "metadata": {
+        "title": "Periyadurai ç­   2024   Numerical modeling of magnetohydrodynamic non Newtonian flow in a cross slot 与深度学习的融合研究",
+        "authors": "待提取（需要 PDF 解析）",
+        "abstract": "基于论文内容的学术研究...",
+        "keywords": [
+          "CFD",
+          "DNS",
+          "湍流"
+        ],
+        "contentSummary": "分析了 Periyadurai ç­ - 2024 - Numerical modeling of magnetohydrodynamic non-Newtonian flow in a cross-slot.pdf 的主要贡献和方法"
+      }
+    },
+    {
+      "id": 2,
+      "filename": "test.pdf",
+      "metadata": {
+        "title": "面向 test 的高性能计算方法",
+        "authors": "待提取（需要 PDF 解析）",
+        "abstract": "基于论文内容的学术研究...",
+        "keywords": [
+          "CFD",
+          "DNS",
+          "湍流"
+        ],
+        "contentSummary": "分析了 test.pdf 的主要贡献和方法"
+      }
+    }
+  ]
+}

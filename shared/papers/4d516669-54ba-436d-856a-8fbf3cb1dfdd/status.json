@@ -1,0 +1,29 @@
+{
+  "task_id": "4d516669-54ba-436d-856a-8fbf3cb1dfdd",
+  "stage": "INTAKE",
+  "stage_status": "waiting_confirm",
+  "progress": {
+    "papers_processed": 1,
+    "papers_total": 1,
+    "topics_generated": 3
+  },
+  "result": {
+    "papers_count": 1,
+    "topics_count": 3
+  },
+  "messages": [
+    {
+      "timestamp": "2026-03-22T05:50:31.425Z",
+      "from": "system",
+      "content": "任务已创建: 未指定标题论文"
+    },
+    {
+      "timestamp": "2026-03-22T05:50:31.430Z",
+      "from": "system",
+      "content": "已上传: test-paper-e2e.pdf"
+    }
+  ],
+  "title": "未指定标题论文",
+  "error": null,
+  "updated_at": "2026-03-22T05:50:34.560Z"
+}

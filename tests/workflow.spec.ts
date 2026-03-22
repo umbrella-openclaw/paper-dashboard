@@ -21,7 +21,7 @@ import {
   createTestPdfSync,
 } from './helpers';
 
-const TEST_PDF = '/tmp/test-paper-e2e.pdf';
+const TEST_PDF = '/home/nothingts/paper-dashboard/tests/test-paper.pdf';
 
 test.describe('Paper Dashboard E2E Workflow', () => {
   test.beforeAll(async () => {

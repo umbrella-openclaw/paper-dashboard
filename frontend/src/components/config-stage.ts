@@ -594,7 +594,8 @@ export class ConfigStage extends LitElement {
     
     this.debug('log', 'loadExistingTask_start');
     
-    // Only restore explicitly saved task - don't auto-load old tasks with papers
+    // IMPORTANT: Only restore explicitly saved task
+    // Never auto-load old tasks with papers - that causes垃圾数据 issues
     const savedTaskId = this.loadTaskId();
     
     if (savedTaskId) {
@@ -605,6 +606,10 @@ export class ConfigStage extends LitElement {
           const status = await statusResponse.json();
           this.taskId = savedTaskId;
           this.taskStatus = status;
+          // Load topics if already analyzed
+          if (status.stage_status === 'waiting_confirm') {
+            await this.loadTopics();
+          }
           this.startPolling(); // Start polling to monitor status changes
           this.debug('log', 'loadExistingTask_restored', { taskId: savedTaskId, status });
           this.dispatchEvent(new CustomEvent('task-loaded', {
@@ -621,8 +626,14 @@ export class ConfigStage extends LitElement {
       }
     }
     
-    // No saved task - user needs to create a new one
-    this.debug('log', 'loadExistingTask_noTask', { message: 'No saved task found, user should create new' });
+    // No saved task - initialize empty state for new task creation
+    this.debug('log', 'loadExistingTask_noTask', { message: 'No saved task found, starting fresh' });
+    this.taskId = null;
+    this.taskStatus = null;
+    // Papers are tracked via taskStatus, no local state needed
+    this.topics = [];
+    this.selectedTopicId = null;
+    this.selectedTopic = { title: '', researchObjective: '', expectedContribution: '', selectedCandidateId: null };
   }
 
 
@@ -660,6 +671,15 @@ export class ConfigStage extends LitElement {
       this.errorMessage = '后端服务未连接，请刷新页面重试';
       return;
     }
+
+    // Clear old task data first to prevent showing old papers
+    this.taskId = null;
+    this.taskStatus = null;
+    // Papers are tracked via taskStatus, no local state needed
+    this.topics = [];
+    this.selectedTopicId = null;
+    this.selectedTopic = { title: '', researchObjective: '', expectedContribution: '', selectedCandidateId: null };
+    this.saveTaskId(null);
 
     try {
       const response = await apiFetch(`${API_BASE}/api/tasks`, { method: 'POST' });
