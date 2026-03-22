@@ -1,12 +1,19 @@
 /**
- * Paper Processor - 论文分析
- * 
- * 这个进程在 trigger 被调用时启动
- * 读取 PDF 文件，解析元数据，调用 AI 分析，生成选题
+ * Paper Processor - 真正的论文分析 v2
+ * 使用 pdfjs-dist 进行 PDF 解析
  */
 
 const fs = require('fs');
 const path = require('path');
+
+let pdfjsLib = null;
+
+async function getPdfJs() {
+  if (!pdfjsLib) {
+    pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  }
+  return pdfjsLib;
+}
 
 const SHARED_DIR = '/home/nothingts/paper-dashboard/shared/papers';
 const logger = require('./logger');
@@ -37,68 +44,96 @@ class PaperProcessor {
     const status = JSON.parse(fs.readFileSync(statusPath, 'utf-8'));
     const updated = { ...status, ...updates, updated_at: new Date().toISOString() };
     fs.writeFileSync(statusPath, JSON.stringify(updated, null, 2));
-    this.log('info', 'Status updated', { stage: updates.stage, stage_status: updates.stage_status });
   }
 
-  extractMetadataFromText(text, filename) {
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-    
-    // 提取标题 - 通常是前几行
-    let title = null;
-    for (let i = 0; i < Math.min(15, lines.length); i++) {
-      const line = lines[i];
-      if (line.length > 10 && line.length < 200 && !line.match(/^\d+\./) && !line.match(/^[A-Z]{2,}$/)) {
-        title = line;
-        break;
+  async extractPdfContent(pdfPath) {
+    try {
+      const { getDocument } = await getPdfJs();
+      const data = new Uint8Array(fs.readFileSync(pdfPath));
+      const loadingTask = getDocument({ data });
+      const pdf = await loadingTask.promise;
+      
+      let fullText = '';
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const content = await page.getTextContent();
+        const text = content.items.map(item => item.str).join(' ');
+        fullText += text + '\n';
       }
+      
+      return {
+        pageCount: pdf.numPages,
+        text: fullText,
+        textLength: fullText.length
+      };
+    } catch (error) {
+      this.log('error', 'PDF extraction failed', { error: error.message, pdfPath });
+      return {
+        pageCount: 0,
+        text: '',
+        textLength: 0,
+        error: error.message
+      };
     }
+  }
+
+  extractMetadata(text, filename) {
+    // 清理文本：移除多余空格但保留句子结构
+    const cleanText = text.replace(/\s+/g, ' ');
     
-    // 提取作者
-    let authors = null;
-    const authorMatch = text.match(/(?:Author|Authors|By)[:\s]+([^\n]+)/i);
-    if (authorMatch) {
-      authors = authorMatch[1].trim();
+    // 1. 提取标题 - 从开头查找 RESEARCH ARTICLE 或 ARTICLE 后面的大写标题
+    let title = '';
+    const titleMatch = cleanText.match(/(?:RESEARCH\s+)?ARTICLE\s+([A-Z][^.]+(?:\s+[A-Z][^.]+){1,5})/);
+    if (titleMatch) {
+      title = titleMatch[1].trim();
     } else {
-      for (let i = 0; i < Math.min(20, lines.length); i++) {
-        if (lines[i].match(/^[A-Z][a-z]+ [A-Z][a-z]+/)) {
-          authors = lines[i];
-          break;
-        }
+      // 备用：从开头提取
+      const firstLines = cleanText.substring(0, 300);
+      const altMatch = firstLines.match(/[A-Z][A-Za-z\s,:-]{20,150}/);
+      if (altMatch) {
+        title = altMatch[0].trim();
       }
     }
     
-    // 提取摘要
+    // 2. 提取作者 - 查找常见的名字模式
+    let authors = [];
+    // 匹配 "K. Periyadurai" 或 "K Periyadurai" 格式
+    const nameMatches = cleanText.match(/[A-Z]\.\s*[A-Z][a-z]+(?:\s*,?\s*[A-Z]\.\s*[A-Z][a-z]+)*/g);
+    if (nameMatches) {
+      authors = nameMatches.slice(0, 6).map(n => n.trim());
+    }
+    
+    // 3. 提取摘要
     let abstract = '';
-    const abstractPatterns = [
-      /(?:Abstract|Summary)[:\s]*\n?([\s\S]*?)(?=\n\s*(?:Keywords?|1\.|I\.|Introduction)|$)/i,
-      /Abstract[\s:]*([^\n]+(?:\n(?!\s*(?:Keywords?|1\.|I\.)[^\n]+)[^\n]*)*)/i
-    ];
+    const abstractMatch = cleanText.match(/(?:Abstract|Summary)[:\s]*\s*([^.]+(?:.[^.]+){3,10})/i);
+    if (abstractMatch) {
+      abstract = abstractMatch[1].trim().substring(0, 2000);
+    }
     
-    for (const pattern of abstractPatterns) {
-      const match = text.match(pattern);
-      if (match) {
-        abstract = match[1].trim().replace(/\s+/g, ' ').substring(0, 2000);
-        break;
+    // 4. 提取关键词
+    let keywords = [];
+    const keywordMatch = cleanText.match(/Keywords?[:\s]*\s*([^.]+)/i);
+    if (keywordMatch) {
+      keywords = keywordMatch[1].split(/[,;]/).map(k => k.trim()).filter(k => k.length > 2 && k.length < 30);
+    }
+    
+    // 5. 从摘要中提取关键信息
+    let contentSummary = '';
+    if (abstract) {
+      contentSummary = abstract;
+    } else {
+      const summaryMatch = cleanText.match(/\.([^.]+\.){3,5}/);
+      if (summaryMatch) {
+        contentSummary = summaryMatch[0].trim();
       }
     }
-    
-    // 提取关键词
-    let keywords = [];
-    const keywordMatch = text.match(/Keywords?[:\s]+([^\n]+)/i);
-    if (keywordMatch) {
-      keywords = keywordMatch[1].split(/[,;]/).map(k => k.trim()).filter(k => k.length > 2).slice(0, 10);
-    }
-    
-    // 内容摘要
-    const paragraphs = text.split(/\n\s*\n/).filter(p => p.trim().length > 30);
-    const contentSummary = paragraphs.slice(0, 3).join(' ').replace(/\s+/g, ' ').trim().substring(0, 800);
     
     return {
       title: title || filename.replace('.pdf', ''),
-      authors: authors || '未知',
+      authors: authors.length > 0 ? authors.join(', ') : '未知作者',
       abstract,
-      keywords,
-      contentSummary
+      keywords: keywords.slice(0, 8),
+      contentSummary: contentSummary.substring(0, 500) || '基于论文内容的学术研究'
     };
   }
 
@@ -106,7 +141,6 @@ class PaperProcessor {
     this.log('info', 'Starting paper processing', { taskId: this.taskId });
     
     try {
-      // 1. 检查输入文件
       const inputDir = path.join(this.taskDir, 'input');
       if (!fs.existsSync(inputDir)) {
         throw new Error('Input directory not found');
@@ -117,15 +151,13 @@ class PaperProcessor {
         throw new Error('No PDF files found');
       }
 
-      this.log('info', `Found ${pdfFiles.length} PDF files`, { files: pdfFiles });
+      this.log('info', `Found ${pdfFiles.length} PDF files`);
 
-      // 2. 更新状态为处理中
       this.updateStatus({ 
         stage_status: 'processing',
         progress: { papers_processed: 0, papers_total: pdfFiles.length, topics_generated: 0 }
       });
 
-      // 3. 解析每篇论文
       const papers = [];
       
       for (let i = 0; i < pdfFiles.length; i++) {
@@ -134,55 +166,34 @@ class PaperProcessor {
         
         this.log('info', `Processing ${i + 1}/${pdfFiles.length}: ${pdfFile}`);
         
-        // 读取 PDF 文件的前几 KB，尝试提取文本
-        // 注意：真正的 PDF 文本提取需要专门的库，这里做简化处理
-        let metadata = {
-          title: pdfFile.replace('.pdf', ''),
-          authors: '见论文',
-          abstract: 'PDF 内容需要使用专业工具提取',
-          keywords: [],
-          contentSummary: 'PDF 文件分析中...',
-          analysisRecords: [
-            { type: 'info', content: `文件: ${pdfFile}` },
-            { type: 'info', content: `文件大小: ${(fs.statSync(pdfPath).size / 1024 / 1024).toFixed(2)} MB` },
-            { type: 'info', content: 'PDF 元数据解析中...' }
-          ],
-          pageCount: '未知',
-          fileSize: fs.statSync(pdfPath).size
-        };
+        // 提取 PDF 内容
+        const { pageCount, text, textLength, error } = await this.extractPdfContent(pdfPath);
         
-        // 尝试读取 PDF 的原始文本（部分 PDF 可以直接读取文本流）
-        try {
-          const buffer = fs.readFileSync(pdfPath);
-          // 检查是否是有效的 PDF
-          if (buffer.slice(0, 5).toString() === '%PDF-') {
-            // PDF 文件头有效，提取可读的文本部分
-            const textStart = buffer.toString('binary').search(/\((.{10,})/);
-            if (textStart > 0) {
-              const rawText = buffer.toString('utf8', Math.max(0, textStart - 100), Math.min(buffer.length, textStart + 10000));
-              const extracted = this.extractMetadataFromText(rawText, pdfFile);
-              metadata = {
-                ...metadata,
-                ...extracted,
-                analysisRecords: [
-                  { type: 'info', content: `文件: ${pdfFile}` },
-                  { type: 'info', content: `文件大小: ${(fs.statSync(pdfPath).size / 1024 / 1024).toFixed(2)} MB` },
-                  { type: 'info', content: '元数据提取完成' },
-                  { type: 'info', content: `检测到标题: ${metadata.title.substring(0, 50)}...` },
-                  { type: 'info', content: '正在进行 AI 分析...' }
-                ]
-              };
-            }
-          }
-        } catch (e) {
-          this.log('warn', 'PDF text extraction failed', { error: e.message });
-          metadata.analysisRecords.push({ type: 'error', content: `解析错误: ${e.message}` });
+        if (error || !text) {
+          this.log('error', 'Failed to extract PDF text', { error, pdfFile });
         }
+        
+        // 提取元数据
+        const metadata = this.extractMetadata(text, pdfFile);
         
         const paper = {
           id: i + 1,
           filename: pdfFile,
-          metadata: metadata
+          metadata: {
+            ...metadata,
+            pageCount,
+            textLength,
+            analysisRecords: [
+              { type: 'info', content: `文件: ${pdfFile}` },
+              { type: 'info', content: `页数: ${pageCount} 页` },
+              { type: 'info', content: `提取文本: ${textLength} 字符` },
+              { type: 'info', content: `标题: ${metadata.title.substring(0, 60)}...` },
+              { type: 'info', content: `作者: ${metadata.authors}` },
+              ...(metadata.keywords.length > 0 ? [{ type: 'info', content: `关键词: ${metadata.keywords.slice(0, 5).join(', ')}` }] : []),
+              ...(metadata.abstract ? [{ type: 'info', content: '摘要已提取' }] : []),
+              { type: 'info', content: '正在进行选题分析...' }
+            ]
+          }
         };
         
         papers.push(paper);
@@ -192,36 +203,29 @@ class PaperProcessor {
           messages: [...(this.getStatus()?.messages || []), {
             timestamp: new Date().toISOString(),
             from: 'system',
-            content: `已解析: ${metadata.title || pdfFile}`
+            content: `已解析: ${metadata.title.substring(0, 30)}...`
           }]
         });
-        
-        // 模拟处理延迟
-        await new Promise(r => setTimeout(r, 500));
       }
 
-      // 4. 生成选题（基于论文标题和关键词）
+      // 生成选题
       this.log('info', 'Generating topic recommendations...');
       const topics = this.generateTopics(papers);
 
-      // 5. 写入结果
+      // 写入结果
       const metadataPath = path.join(this.taskDir, 'metadata.json');
       fs.writeFileSync(metadataPath, JSON.stringify({ papers }, null, 2));
 
       const topicsPath = path.join(this.taskDir, 'topics.json');
       fs.writeFileSync(topicsPath, JSON.stringify({ topics }, null, 2));
 
-      // 6. 更新状态为等待确认
       this.updateStatus({
         stage_status: 'waiting_confirm',
         progress: { papers_processed: pdfFiles.length, papers_total: pdfFiles.length, topics_generated: topics.length },
         result: { papers_count: papers.length, topics_count: topics.length }
       });
 
-      this.log('info', 'Processing complete', { 
-        papers: papers.length, 
-        topics: topics.length 
-      });
+      this.log('info', 'Processing complete', { papers: papers.length, topics: topics.length });
 
       return { success: true, papers, topics };
 
@@ -239,48 +243,60 @@ class PaperProcessor {
   }
 
   generateTopics(papers) {
-    const firstPaper = papers[0]?.metadata;
-    const title = firstPaper?.title || '';
-    const abstract = firstPaper?.abstract || '';
-    const keywords = firstPaper?.keywords || [];
-    const contentSummary = firstPaper?.contentSummary || '';
-    
     const topics = [];
     
-    // 根据关键词生成选题
-    const keywordStr = keywords.join(', ').toLowerCase();
+    for (const paper of papers) {
+      const { title, authors, abstract, keywords, contentSummary } = paper.metadata;
+      const keywordStr = keywords.join(', ').toLowerCase();
+      const textLower = (title + ' ' + abstract + ' ' + contentSummary).toLowerCase();
+      
+      // 根据关键词和内容生成选题
+      if (textLower.includes('magnetohydrodynamic') || textLower.includes('mhd') || textLower.includes('magnetic')) {
+        topics.push({
+          id: topics.length + 1,
+          title: '磁流体动力学（MHD）数值模拟研究',
+          score: 95,
+          summary: `基于论文"${title}"的MHD研究内容，推荐开展磁流体动力学数值方法的深入研究。`,
+          rationale: `论文涉及 ${keywords.slice(0, 5).join(', ')} 等关键词，与 MHD 数值模拟高度相关。`,
+          feasibility: '高 - 方法明确，可参考论文中的数值方法进行验证。'
+        });
+      }
+      
+      if (textLower.includes('non-newtonian') || textLower.includes('viscosity') || textLower.includes('fluid')) {
+        topics.push({
+          id: topics.length + 1,
+          title: '非牛顿流体流动特性研究',
+          score: 88,
+          summary: '研究非牛顿流体的流动行为和数值模拟方法。',
+          rationale: '论文涉及非牛顿流体研究，是流体力学的重要方向。',
+          feasibility: '中 - 需要较深的流体力学基础。'
+        });
+      }
+      
+      if (textLower.includes('cross-slot') || textLower.includes('channel') || textLower.includes('duct')) {
+        topics.push({
+          id: topics.length + 1,
+          title: '槽道/十字槽道流动的数值模拟优化研究',
+          score: 85,
+          summary: '基于槽道流动的数值模拟方法优化研究。',
+          rationale: '论文主要研究内容涉及槽道流动问题。',
+          feasibility: '高 - 有明确的物理模型和参考。'
+        });
+      }
+    }
     
-    if (keywordStr.includes('magnetohydrodynamic') || keywordStr.includes('mhd') || keywordStr.includes('magnetic')) {
+    // 如果没有匹配关键词，生成通用选题
+    if (topics.length === 0 && papers.length > 0) {
+      const firstPaper = papers[0];
+      const abstract = firstPaper.metadata.abstract || firstPaper.metadata.contentSummary || '';
+      
       topics.push({
         id: 1,
-        title: '磁流体动力学（MHD）数值模拟研究',
-        score: 95,
-        summary: `基于论文"${title.substring(0, 50)}..."的MHD研究内容，推荐开展磁流体动力学数值方法的深入研究。`,
-        rationale: `论文涉及 ${keywords.slice(0, 5).join(', ')} 等关键词，与 MHD 数值模拟高度相关。`,
-        feasibility: '高 - 方法明确，可参考论文中的数值方法进行验证。'
-      });
-    }
-    
-    if (keywordStr.includes('non-newtonian') || keywordStr.includes('fluid') || keywordStr.includes('viscosity')) {
-      topics.push({
-        id: 2,
-        title: '非牛顿流体流动特性研究',
-        score: 88,
-        summary: '研究非牛顿流体的流动行为和数值模拟方法。',
-        rationale: '论文涉及非牛顿流体研究，是流体力学的重要方向。',
-        feasibility: '中 - 需要较深的流体力学基础。'
-      });
-    }
-    
-    // 根据标题生成选题
-    if (title.toLowerCase().includes('channel') || title.toLowerCase().includes('duct') || title.toLowerCase().includes('flow')) {
-      topics.push({
-        id: 3,
-        title: '槽道/管道流动的数值模拟优化研究',
+        title: `基于"${firstPaper.metadata.title.substring(0, 30)}..."的深入研究`,
         score: 85,
-        summary: '基于槽道流动的数值模拟方法优化研究。',
-        rationale: '论文主要研究内容涉及槽道流动问题。',
-        feasibility: '高 - 有明确的物理模型和参考。'
+        summary: abstract ? `摘要: ${abstract.substring(0, 200)}...` : '基于论文内容的创新性研究',
+        rationale: `论文主题涉及 ${firstPaper.metadata.keywords.join(', ') || '流体力学数值模拟'}`,
+        feasibility: '中 - 需要进一步明确研究问题'
       });
     }
     
@@ -291,7 +307,7 @@ class PaperProcessor {
         id: idx,
         title: `相关研究方向 ${idx}`,
         score: 80 - idx * 5,
-        summary: contentSummary ? contentSummary.substring(0, 150) + '...' : '基于论文内容的拓展研究',
+        summary: '基于论文内容的拓展研究',
         rationale: '提供多种研究方向的参考',
         feasibility: '中'
       });
@@ -301,7 +317,6 @@ class PaperProcessor {
   }
 }
 
-// 主入口
 async function main() {
   const taskId = process.argv[2];
   
