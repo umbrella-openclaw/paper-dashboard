@@ -3,13 +3,13 @@
   "stage": "INTAKE",
   "stage_status": "waiting_confirm",
   "progress": {
-    "papers_processed": 1,
-    "papers_total": 1,
-    "topics_generated": 3
+    "papers_processed": 2,
+    "papers_total": 2,
+    "topics_generated": 5
   },
   "result": {
-    "papers_count": 1,
-    "topics_count": 3
+    "papers_count": 2,
+    "topics_count": 5
   },
   "messages": [
     {
@@ -51,9 +51,34 @@
       "timestamp": "2026-03-22T07:16:42.837Z",
       "from": "system",
       "content": "已解析: R E S E A R C H A R T I C L E ..."
+    },
+    {
+      "timestamp": "2026-03-22T07:22:04.176Z",
+      "from": "user",
+      "content": "[Feedback] 细化求解方法"
+    },
+    {
+      "timestamp": "2026-03-22T07:27:22.386Z",
+      "from": "system",
+      "content": "已上传: PhysRevE.93.031101.pdf"
+    },
+    {
+      "timestamp": "2026-03-22T07:27:23.702Z",
+      "from": "system",
+      "content": "已解析: R E S E A R C H A R T I C L E ..."
+    },
+    {
+      "timestamp": "2026-03-22T07:27:23.774Z",
+      "from": "system",
+      "content": "已解析: RAPID COMMUNICATIONS PHYSICAL ..."
+    },
+    {
+      "timestamp": "2026-03-22T07:29:17.614Z",
+      "from": "user",
+      "content": "[Feedback] 如果你能收到反馈，你就把这个标题改成“磁流体与不可压缩非牛顿流的耦合效应”"
     }
   ],
   "title": "未指定标题论文",
   "error": null,
-  "updated_at": "2026-03-22T07:16:42.838Z"
+  "updated_at": "2026-03-22T07:29:17.614Z"
 }
