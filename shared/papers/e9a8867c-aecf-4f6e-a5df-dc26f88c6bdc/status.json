@@ -26,9 +26,34 @@
       "timestamp": "2026-03-22T07:08:16.832Z",
       "from": "system",
       "content": "已解析: R E S E A R C H A R T I C L E ..."
+    },
+    {
+      "timestamp": "2026-03-22T07:14:48.785Z",
+      "from": "system",
+      "content": "已上传: Periyadurai ç­ - 2024 - Numerical modeling of magnetohydrodynamic non-Newtonian flow in a cross-slot.pdf"
+    },
+    {
+      "timestamp": "2026-03-22T07:14:49.633Z",
+      "from": "system",
+      "content": "已解析: R E S E A R C H A R T I C L E ..."
+    },
+    {
+      "timestamp": "2026-03-22T07:15:14.447Z",
+      "from": "user",
+      "content": "[Feedback] 明确一点"
+    },
+    {
+      "timestamp": "2026-03-22T07:16:42.148Z",
+      "from": "system",
+      "content": "已上传: Periyadurai ç­ - 2024 - Numerical modeling of magnetohydrodynamic non-Newtonian flow in a cross-slot.pdf"
+    },
+    {
+      "timestamp": "2026-03-22T07:16:42.837Z",
+      "from": "system",
+      "content": "已解析: R E S E A R C H A R T I C L E ..."
     }
   ],
   "title": "未指定标题论文",
   "error": null,
-  "updated_at": "2026-03-22T07:08:16.833Z"
+  "updated_at": "2026-03-22T07:16:42.838Z"
 }

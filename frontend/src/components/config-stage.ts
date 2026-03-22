@@ -1529,9 +1529,33 @@ export class ConfigStage extends LitElement {
     this.errorMessage = '反馈已提交，OpenClaw 正在处理...';
   }
 
-  private regenerateTopics() {
+  private async regenerateTopics() {
+    if (!this.taskId) {
+      this.errorMessage = '没有正在进行的任务';
+      return;
+    }
+    
     this.errorMessage = '正在重新生成选题...';
-    // Would trigger OpenClaw to regenerate
+    
+    try {
+      const response = await apiFetch(`${API_BASE}/api/tasks/${this.taskId}/topics/regenerate`, {
+        method: 'POST'
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.topics) {
+          this.topics = data.topics;
+          this.selectedTopicId = null;
+          this.selectedTopic = { title: '', researchObjective: '', expectedContribution: '', selectedCandidateId: null };
+          this.errorMessage = '选题已重新生成';
+        }
+      } else {
+        this.errorMessage = '重新生成失败';
+      }
+    } catch (e) {
+      this.errorMessage = '重新生成失败: ' + (e as Error).message;
+    }
   }
 
   private updateTopicField(field: keyof SelectedTopic, value: string) {
@@ -1771,60 +1795,104 @@ export class ConfigStage extends LitElement {
           `}
         </article>
 
-        <!-- Panel 3: 选题详情 -->
+        <!-- Panel 3: 选题详情与确认 -->
         <article class="panel">
           <h3><span class="step">3</span>选题详情与确认</h3>
           
-          ${this.selectedTopicId === null ? html`
-            <div class="empty">
-              请先在中间区域选择一个候选选题
+          ${this.uploadedPapersCount > 0 ? html`
+            <div class="paper-reference-viewer">
+              <div class="viewer-header" @click=${() => this.togglePaperViewer()}>
+                <span class="viewer-title">📚 参考论文 (${this.uploadedPapersCount} 篇)</span>
+                <span class="viewer-toggle">${this.paperViewerOpen ? '▲' : '▼'}</span>
+              </div>
+              
+              ${this.paperViewerOpen ? html`
+                <div class="viewer-content">
+                  ${this.paperList.length > 1 ? html`
+                    <div class="paper-tabs-compact">
+                      ${this.paperList.map((paper: any, idx: number) => html`
+                        <button 
+                          class="paper-tab-compact ${idx === this.selectedPaperIndex ? 'active' : ''}"
+                          @click=${() => this.selectPaper(idx)}
+                        >
+                          📄 ${idx + 1}
+                        </button>
+                      `)}
+                    </div>
+                  ` : ''}
+                  
+                  ${this.paperMetadata ? html`
+                    <div class="current-paper-preview">
+                      <div class="paper-title-preview">${this.paperMetadata.title || '未知标题'}</div>
+                      ${this.paperMetadata.authors ? html`
+                        <div class="paper-authors-preview">👥 ${this.paperMetadata.authors}</div>
+                      ` : ''}
+                      ${this.paperMetadata.pageCount ? html`
+                        <div class="paper-meta-preview">📄 ${this.paperMetadata.pageCount} 页</div>
+                      ` : ''}
+                      ${this.paperMetadata.abstract ? html`
+                        <div class="paper-abstract-preview">
+                          <strong>摘要：</strong>${this.paperMetadata.abstract.substring(0, 300)}...
+                        </div>
+                      ` : ''}
+                      ${this.paperMetadata.keywords?.length ? html`
+                        <div class="paper-keywords-preview">
+                          ${this.paperMetadata.keywords.slice(0, 6).map((k: string) => html`<span class="kw-tag">${k}</span>`)}
+                        </div>
+                      ` : ''}
+                    </div>
+                  ` : html`
+                    <div class="loading-paper">正在加载论文内容...</div>
+                  `}
+                </div>
+              ` : ''}
             </div>
           ` : html`
-            <div class="topic-detail">
-              <div class="field">
-                <label>论文标题</label>
-                <input
-                  type="text"
-                  placeholder="输入或修改论文标题"
-                  .value=${this.selectedTopic.title}
-                  @input=${(e: Event) => this.updateTopicField('title', (e.target as HTMLInputElement).value)}
-                >
-              </div>
-
-              <div class="field">
-                <label>研究目标</label>
-                <textarea
-                  placeholder="描述研究的核心目标..."
-                  .value=${this.selectedTopic.researchObjective}
-                  @input=${(e: Event) => this.updateTopicField('researchObjective', (e.target as HTMLTextAreaElement).value)}
-                ></textarea>
-              </div>
-
-              <div class="field">
-                <label>预期贡献</label>
-                <textarea
-                  placeholder="说明研究的创新点和贡献..."
-                  .value=${this.selectedTopic.expectedContribution}
-                  @input=${(e: Event) => this.updateTopicField('expectedContribution', (e.target as HTMLTextAreaElement).value)}
-                ></textarea>
-              </div>
-            </div>
-
-            <div class="confirm-section">
-              <h4>✅ 确认选题进入下一阶段</h4>
-              <p style="font-size: var(--text-xs); color: #065f46; margin-bottom: var(--space-3);">
-                确认后将进入 Literature 阶段，OpenClaw 开始文献检索与证据沉淀。
-              </p>
-              <button 
-                class="primary" 
-                style="width: 100%;"
-                ?disabled=${!this.selectedTopic.title.trim()}
-                @click=${this.confirmTopic}
-              >
-                确认选题，进入 Literature 阶段 →
-              </button>
+            <div class="empty-papers-hint">
+              请在左侧上传参考论文
             </div>
           `}
+          
+          <div class="topic-detail">
+            <div class="field">
+              <label>论文标题</label>
+              <input
+                type="text"
+                placeholder="选择或输入论文标题"
+                .value=${this.selectedTopic.title}
+                @input=${(e: Event) => this.updateTopicField('title', (e.target as HTMLInputElement).value)}
+              >
+            </div>
+
+            <div class="field">
+              <label>研究目标</label>
+              <textarea
+                placeholder="描述研究的核心目标..."
+                .value=${this.selectedTopic.researchObjective}
+                @input=${(e: Event) => this.updateTopicField('researchObjective', (e.target as HTMLTextAreaElement).value)}
+              ></textarea>
+            </div>
+
+            <div class="field">
+              <label>预期贡献</label>
+              <textarea
+                placeholder="说明研究的创新点和贡献..."
+                .value=${this.selectedTopic.expectedContribution}
+                @input=${(e: Event) => this.updateTopicField('expectedContribution', (e.target as HTMLTextAreaElement).value)}
+              ></textarea>
+            </div>
+          </div>
+
+          <div class="confirm-section">
+            <button 
+              class="primary" 
+              style="width: 100%;"
+              ?disabled=${!this.selectedTopic.title?.trim()}
+              @click=${this.confirmTopic}
+            >
+              ✓ 确认选题，进入 Literature 阶段 →
+            </button>
+          </div>
         </article>
       </section>
     `;

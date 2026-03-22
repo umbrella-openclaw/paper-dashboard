@@ -306,6 +306,52 @@ app.post('/api/tasks/:taskId/topics', (req, res) => {
   res.json({ success: true });
 });
 
+// Regenerate topics based on uploaded papers
+app.post('/api/tasks/:taskId/topics/regenerate', async (req, res) => {
+  const { taskId } = req.params;
+  const metadataPath = path.join(PAPERS_DIR, taskId, 'metadata.json');
+  
+  if (!fs.existsSync(metadataPath)) {
+    return res.status(400).json({ error: 'No papers found. Please upload papers first.' });
+  }
+  
+  try {
+    const { papers } = JSON.parse(fs.readFileSync(metadataPath, 'utf-8'));
+    
+    if (!papers || papers.length === 0) {
+      return res.status(400).json({ error: 'No papers found' });
+    }
+    
+    // Generate new topics based on paper content
+    const processorPath = path.join(__dirname, 'processor.js');
+    const { exec } = require('child_process');
+    
+    exec(`node ${processorPath} ${taskId}`, (error, stdout, stderr) => {
+      if (error) {
+        logger.api('error', 'Topic regeneration failed', { taskId, error: error.message });
+        return res.status(500).json({ error: 'Failed to regenerate topics' });
+      }
+      
+      try {
+        const topicsPath = path.join(PAPERS_DIR, taskId, 'topics.json');
+        if (fs.existsSync(topicsPath)) {
+          const { topics } = JSON.parse(fs.readFileSync(topicsPath, 'utf-8'));
+          updateStatus(taskId, { stage_status: 'waiting_confirm' });
+          logger.api('info', 'Topics regenerated', { taskId, count: topics.length });
+          res.json({ success: true, topics });
+        } else {
+          res.status(500).json({ error: 'Failed to generate topics' });
+        }
+      } catch (e) {
+        res.status(500).json({ error: 'Failed to parse topics' });
+      }
+    });
+  } catch (e) {
+    logger.api('error', 'Topic regeneration error', { taskId, error: e.message });
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // Metadata endpoint - get parsed paper metadata
 app.get('/api/tasks/:taskId/metadata', (req, res) => {
   const { taskId } = req.params;
