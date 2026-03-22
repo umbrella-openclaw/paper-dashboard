@@ -4,12 +4,12 @@
 
 const WebSocket = require('ws');
 const http = require('http');
-const crypto = require('fs');
+const crypto = require('crypto');
+const fs = require('fs');
+const path = require('path');
 
 // 读取 API 密钥
 const KEY_FILE = path.join(__dirname, '.api_key');
-const fs = require('fs');
-const path = require('path');
 
 let API_KEY = '';
 if (fs.existsSync(KEY_FILE)) {

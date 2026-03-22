@@ -276,7 +276,7 @@ export class LiteratureStage extends LitElement {
       };
       await apiFetch(`${API_BASE}/api/stages/literature`, {
         method: 'POST',
-        body: JSON.stringify({ taskId: this.taskId, ...data })
+        body: JSON.stringify({ ...data, taskId: this.taskId })
       }).catch(() => {});
     } catch (e) { console.error('[LiteratureStage] saveLiteratureResults error:', e); }
   }

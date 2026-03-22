@@ -291,6 +291,137 @@ app.delete('/api/tasks/:taskId', (req, res) => {
   res.json({ success: true });
 });
 
+// === Stage API Endpoints ===
+
+// Outline endpoints
+app.get('/api/tasks/:taskId/outline', (req, res) => {
+  const outlinePath = path.join(PAPERS_DIR, req.params.taskId, 'outline.json');
+  res.json({ outline: fs.existsSync(outlinePath) ? JSON.parse(fs.readFileSync(outlinePath, 'utf-8')) : null });
+});
+
+app.put('/api/tasks/:taskId/outline', (req, res) => {
+  const { taskId } = req.params;
+  const { outline } = req.body;
+  const outlinePath = path.join(PAPERS_DIR, taskId, 'outline.json');
+  fs.writeFileSync(outlinePath, JSON.stringify(outline, null, 2));
+  updateStatus(taskId, { stage: 'OUTLINE', stage_status: 'completed' });
+  logger.api('info', 'Outline saved', { taskId });
+  res.json({ success: true });
+});
+
+app.post('/api/tasks/:taskId/outline/generate', async (req, res) => {
+  const { taskId } = req.params;
+  updateStatus(taskId, { stage: 'OUTLINE', stage_status: 'processing' });
+  // Simulate AI generation - in real implementation, call OpenClaw
+  setTimeout(() => {
+    updateStatus(taskId, { stage: 'OUTLINE', stage_status: 'waiting_confirm' });
+  }, 2000);
+  res.json({ success: true, message: 'Generating outline...' });
+});
+
+// Data Requirements endpoints
+app.get('/api/tasks/:taskId/data-requirements', (req, res) => {
+  const drPath = path.join(PAPERS_DIR, req.params.taskId, 'data-requirements.json');
+  res.json({ dataRequirements: fs.existsSync(drPath) ? JSON.parse(fs.readFileSync(drPath, 'utf-8')) : null });
+});
+
+app.put('/api/tasks/:taskId/data-requirements', (req, res) => {
+  const { taskId } = req.params;
+  const { dataRequirements } = req.body;
+  const drPath = path.join(PAPERS_DIR, taskId, 'data-requirements.json');
+  fs.writeFileSync(drPath, JSON.stringify(dataRequirements, null, 2));
+  updateStatus(taskId, { stage: 'DATA_REQUIREMENTS', stage_status: 'completed' });
+  logger.api('info', 'Data requirements saved', { taskId });
+  res.json({ success: true });
+});
+
+app.post('/api/tasks/:taskId/data-requirements/generate', async (req, res) => {
+  const { taskId } = req.params;
+  updateStatus(taskId, { stage: 'DATA_REQUIREMENTS', stage_status: 'processing' });
+  setTimeout(() => {
+    updateStatus(taskId, { stage: 'DATA_REQUIREMENTS', stage_status: 'waiting_confirm' });
+  }, 2000);
+  res.json({ success: true, message: 'Generating data requirements...' });
+});
+
+// Drafting endpoints
+app.get('/api/tasks/:taskId/drafting', (req, res) => {
+  const draftPath = path.join(PAPERS_DIR, req.params.taskId, 'drafting.json');
+  res.json({ drafting: fs.existsSync(draftPath) ? JSON.parse(fs.readFileSync(draftPath, 'utf-8')) : null });
+});
+
+app.put('/api/tasks/:taskId/drafting/section/:sectionId', (req, res) => {
+  const { taskId, sectionId } = req.params;
+  const { content } = req.body;
+  // Save section content
+  const sectionPath = path.join(PAPERS_DIR, taskId, 'sections', `${sectionId}.json`);
+  fs.mkdirSync(path.dirname(sectionPath), { recursive: true });
+  fs.writeFileSync(sectionPath, JSON.stringify({ content, updatedAt: new Date().toISOString() }, null, 2));
+  logger.api('info', 'Section saved', { taskId, sectionId });
+  res.json({ success: true });
+});
+
+app.post('/api/tasks/:taskId/drafting/generate', async (req, res) => {
+  const { taskId } = req.params;
+  updateStatus(taskId, { stage: 'DRAFTING', stage_status: 'processing' });
+  setTimeout(() => {
+    updateStatus(taskId, { stage: 'DRAFTING', stage_status: 'waiting_confirm' });
+  }, 3000);
+  res.json({ success: true, message: 'Generating draft...' });
+});
+
+// Polishing endpoints
+app.get('/api/tasks/:taskId/polishing', (req, res) => {
+  const polishPath = path.join(PAPERS_DIR, req.params.taskId, 'polishing.json');
+  res.json({ polishing: fs.existsSync(polishPath) ? JSON.parse(fs.readFileSync(polishPath, 'utf-8')) : null });
+});
+
+app.post('/api/tasks/:taskId/polishing/run', async (req, res) => {
+  const { taskId } = req.params;
+  updateStatus(taskId, { stage: 'POLISHING', stage_status: 'processing' });
+  setTimeout(() => {
+    updateStatus(taskId, { stage: 'POLISHING', stage_status: 'waiting_confirm' });
+  }, 3000);
+  res.json({ success: true, message: 'Running polishing...' });
+});
+
+// Review endpoints
+app.get('/api/tasks/:taskId/review', (req, res) => {
+  const reviewPath = path.join(PAPERS_DIR, req.params.taskId, 'review.json');
+  res.json({ review: fs.existsSync(reviewPath) ? JSON.parse(fs.readFileSync(reviewPath, 'utf-8')) : null });
+});
+
+app.post('/api/tasks/:taskId/review/run', async (req, res) => {
+  const { taskId } = req.params;
+  updateStatus(taskId, { stage: 'REVIEW', stage_status: 'processing' });
+  setTimeout(() => {
+    updateStatus(taskId, { stage: 'REVIEW', stage_status: 'waiting_confirm' });
+  }, 3000);
+  res.json({ success: true, message: 'Running review...' });
+});
+
+// Finalize endpoints
+app.get('/api/tasks/:taskId/finalize', (req, res) => {
+  const finalizePath = path.join(PAPERS_DIR, req.params.taskId, 'finalize.json');
+  res.json({ finalize: fs.existsSync(finalizePath) ? JSON.parse(fs.readFileSync(finalizePath, 'utf-8')) : null });
+});
+
+app.post('/api/tasks/:taskId/finalize/generate', async (req, res) => {
+  const { taskId } = req.params;
+  updateStatus(taskId, { stage: 'FINALIZE', stage_status: 'processing' });
+  setTimeout(() => {
+    updateStatus(taskId, { stage: 'FINALIZE', stage_status: 'completed' });
+  }, 2000);
+  res.json({ success: true, message: 'Generating submission package...' });
+});
+
+app.post('/api/tasks/:taskId/submit', (req, res) => {
+  const { taskId } = req.params;
+  updateStatus(taskId, { stage_status: 'submitted', result: { submittedAt: new Date().toISOString() } });
+  logger.api('info', 'Paper submitted', { taskId });
+  res.json({ success: true, message: 'Paper submitted successfully!' });
+});
+
 app.use((error, req, res, next) => {
   logger.error('SERVER', error.message, { stack: error.stack });
   res.status(500).json({ error: error.message });

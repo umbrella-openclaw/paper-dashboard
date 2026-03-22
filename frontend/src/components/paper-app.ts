@@ -8,6 +8,13 @@ import './paper-uploader.ts';
 import './stat-card.ts';
 import './stage-navigator.ts';
 import './config-stage.ts';
+import './literature-stage.ts';
+import './outline-stage.ts';
+import './data-requirements-stage.ts';
+import './drafting-stage.ts';
+import './polishing-stage.ts';
+import './review-stage.ts';
+import './finalize-stage.ts';
 
 export type WritingStage = 'INTAKE' | 'LITERATURE' | 'OUTLINE' | 'DATA_REQUIREMENTS' | 'DRAFTING' | 'POLISHING' | 'REVIEW' | 'FINALIZE';
 
@@ -231,6 +238,48 @@ export class PaperApp extends LitElement {
     // Advance to the next stage after topic confirmation
     this.advanceStage();
   }
+
+  private onLiteratureConfirmed(e: CustomEvent) {
+    console.log('[PaperApp] Literature confirmed');
+    this.advanceStage();
+  }
+
+  private onOutlineConfirmed(e: CustomEvent) {
+    console.log('[PaperApp] Outline confirmed');
+    this.advanceStage();
+  }
+
+  private onRequirementsConfirmed(e: CustomEvent) {
+    console.log('[PaperApp] Requirements confirmed');
+    this.advanceStage();
+  }
+
+  private onDraftingConfirmed(e: CustomEvent) {
+    console.log('[PaperApp] Drafting confirmed');
+    this.advanceStage();
+  }
+
+  private onPolishingConfirmed(e: CustomEvent) {
+    console.log('[PaperApp] Polishing confirmed');
+    this.advanceStage();
+  }
+
+  private onReviewPassed(e: CustomEvent) {
+    console.log('[PaperApp] Review passed');
+    this.advanceStage();
+  }
+
+  private onReviewFailed(e: CustomEvent) {
+    console.log('[PaperApp] Review failed, returning to polishing');
+    // Go back to previous stage
+    this.rollbackStage();
+  }
+
+  private onSubmissionComplete(e: CustomEvent) {
+    console.log('[PaperApp] Submission complete:', e.detail);
+    // Show completion message
+    alert('🎉 论文已提交！');
+  }
   
   private advanceStage() {
     if (!this.configReady && this.currentStage === 'INTAKE') {
@@ -320,14 +369,67 @@ export class PaperApp extends LitElement {
       `;
     }
     
-    // For other stages, show placeholder
+    if (stage === 'LITERATURE') {
+      return html`
+        <literature-stage
+          @literature-confirmed=${this.onLiteratureConfirmed}
+        ></literature-stage>
+      `;
+    }
+    
+    if (stage === 'OUTLINE') {
+      return html`
+        <outline-stage
+          @outline-confirmed=${this.onOutlineConfirmed}
+        ></outline-stage>
+      `;
+    }
+    
+    if (stage === 'DATA_REQUIREMENTS') {
+      return html`
+        <data-requirements-stage
+          @requirements-confirmed=${this.onRequirementsConfirmed}
+        ></data-requirements-stage>
+      `;
+    }
+    
+    if (stage === 'DRAFTING') {
+      return html`
+        <drafting-stage
+          @drafting-confirmed=${this.onDraftingConfirmed}
+        ></drafting-stage>
+      `;
+    }
+    
+    if (stage === 'POLISHING') {
+      return html`
+        <polishing-stage
+          @polishing-confirmed=${this.onPolishingConfirmed}
+        ></polishing-stage>
+      `;
+    }
+    
+    if (stage === 'REVIEW') {
+      return html`
+        <review-stage
+          @review-passed=${this.onReviewPassed}
+          @review-failed=${this.onReviewFailed}
+        ></review-stage>
+      `;
+    }
+    
+    if (stage === 'FINALIZE') {
+      return html`
+        <finalize-stage
+          @submission-complete=${this.onSubmissionComplete}
+        ></finalize-stage>
+      `;
+    }
+    
     return html`
       <div class="empty-state">
         <h2>${this.getStageDisplayName(stage)}</h2>
-        <p>该阶段开发中...</p>
-        <p style="margin-top: var(--space-4); font-size: var(--text-sm); color: var(--color-text-tertiary);">
-          由 ${this.getStageAgent(stage)} 负责
-        </p>
+        <p>Stage not found</p>
       </div>
     `;
   }
