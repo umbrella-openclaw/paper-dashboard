@@ -233,6 +233,30 @@ export class PaperApp extends LitElement {
     this.previewMode = false;
     this.previewStage = null;
   }
+
+  private onTaskSelect(e: CustomEvent<{ taskId: string }>) {
+    // Load existing task instead of creating new one
+    localStorage.setItem('paper-dashboard-workflow-task-id', e.detail.taskId);
+    
+    this.workflowActive = true;
+    this.currentStage = 'INTAKE';
+    this.completedStages = [];
+    this.configReady = false;
+    this.previewMode = false;
+    this.previewStage = null;
+  }
+
+  private onTaskDeleted(e: CustomEvent<{ taskId: string }>) {
+    // If the deleted task was active, reset workflow
+    const savedTaskId = localStorage.getItem('paper-dashboard-workflow-task-id');
+    if (savedTaskId === e.detail.taskId) {
+      localStorage.removeItem('paper-dashboard-workflow-task-id');
+      localStorage.removeItem('paper-dashboard-task-id');
+      this.workflowActive = false;
+      this.currentStage = 'INTAKE';
+      this.completedStages = [];
+    }
+  }
   
   private onConfigReadyChange(e: CustomEvent<boolean>) {
     this.configReady = e.detail;
@@ -485,6 +509,8 @@ export class PaperApp extends LitElement {
               .selectedFolderId=${this.selectedFolderId}
               @folder-select=${this.onFolderSelect}
               @create-paper=${this.onCreatePaper}
+              @task-select=${this.onTaskSelect}
+              @task-deleted=${this.onTaskDeleted}
             ></paper-sidebar>
           </aside>
           
@@ -513,6 +539,8 @@ export class PaperApp extends LitElement {
               .selectedFolderId=${this.selectedFolderId}
               @folder-select=${this.onFolderSelect}
               @create-paper=${this.onCreatePaper}
+              @task-select=${this.onTaskSelect}
+              @task-deleted=${this.onTaskDeleted}
             ></paper-sidebar>
           </aside>
           
