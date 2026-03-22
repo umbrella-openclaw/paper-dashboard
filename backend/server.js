@@ -29,7 +29,7 @@ function getApiKey() {
 }
 
 const API_KEY = getApiKey();
-const ALLOWED_ORIGINS = ['http://127.0.0.1:3460', 'http://localhost:3460', 'http://localhost:3000', 'http://localhost:8080'];
+const ALLOWED_ORIGINS = ['http://localhost:3460', 'http://localhost:8080', 'http://127.0.0.1:3460', 'http://127.0.0.1:8080'];
 
 function requireApiKey(req, res, next) {
   // Keep task-status lookup public so unknown tasks return 404 instead of auth errors.

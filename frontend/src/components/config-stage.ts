@@ -1,7 +1,7 @@
 import { LitElement, css, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 
-const API_BASE = 'http://127.0.0.1:8080';
+const API_BASE = 'http://localhost:8080'; // Use relative URL, API calls go to same host as frontend
 const API_KEY = '3a3ce9520026e5ca4b4196f964fda10fb71fa224f0c2925fd031373298844f8a';
 
 function apiHeaders() {
